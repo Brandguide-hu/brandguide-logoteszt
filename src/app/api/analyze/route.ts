@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { getSystemPrompt, buildUserPrompt } from '@/lib/prompts';
 import { TestLevel, AnalysisResult } from '@/types';
 import { getRatingFromScore } from '@/lib/utils';
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       await sendEvent('status', { message: 'Mentés adatbázisba...', phase: 'saving' });
 
       // Save to Supabase
-      const { data: insertedData, error: dbError } = await supabase
+      const { data: insertedData, error: dbError } = await getSupabase()
         .from('analyses')
         .insert({
           result: result as unknown as Record<string, unknown>,
