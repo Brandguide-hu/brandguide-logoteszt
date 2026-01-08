@@ -10,6 +10,34 @@ interface StreamingLoaderProps {
   streamingText: string;
 }
 
+// Arculat és logótervezéshez kapcsolódó kifejezések
+const designPhrases = [
+  'Vizuális egyensúly elemzése',
+  'Színharmónia vizsgálata',
+  'Tipográfiai hierarchia',
+  'Negatív tér használata',
+  'Formai egyszerűség',
+  'Méretarányok ellenőrzése',
+  'Kontrasztok értékelése',
+  'Márkaidentitás',
+  'Felismerhetőség',
+  'Időtálló design',
+  'Skálázhatóság',
+  'Alkalmazhatóság',
+  'Egyediség vizsgálata',
+  'Releváns szimbólumok',
+  'Célcsoport illeszkedés',
+  'Professzionális megjelenés',
+  'Vizuális konzisztencia',
+  'Olvashatóság',
+  'Memorizálhatóság',
+  'Márkaértékek tükrözése',
+  'Geometriai pontosság',
+  'Optikai korrekciók',
+  'Karakteres vonalvezetés',
+  'Harmonikus kompozíció',
+];
+
 const phases = [
   { id: 'start', label: 'Elemzés indítása', icon: Sparkles },
   { id: 'analyzing', label: 'Claude elemzi a logót', icon: Brain },
@@ -18,14 +46,29 @@ const phases = [
   { id: 'complete', label: 'Kész!', icon: CheckCircle },
 ];
 
-export function StreamingLoader({ status, phase, streamingText }: StreamingLoaderProps) {
+export function StreamingLoader({ status, phase }: Omit<StreamingLoaderProps, 'streamingText'> & { streamingText?: string }) {
   const [dots, setDots] = useState('');
+  const [currentPhrase, setCurrentPhrase] = useState(designPhrases[0]);
+  const [phraseIndex, setPhraseIndex] = useState(0);
 
   useEffect(() => {
     if (phase === 'complete') return;
     const interval = setInterval(() => {
       setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
     }, 500);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  // Rotate through design phrases during analysis
+  useEffect(() => {
+    if (phase !== 'analyzing') return;
+    const interval = setInterval(() => {
+      setPhraseIndex((prev) => {
+        const next = (prev + 1) % designPhrases.length;
+        setCurrentPhrase(designPhrases[next]);
+        return next;
+      });
+    }, 1800);
     return () => clearInterval(interval);
   }, [phase]);
 
@@ -107,22 +150,24 @@ export function StreamingLoader({ status, phase, streamingText }: StreamingLoade
             : 'Kérlek várj...'}
         </p>
 
-        {/* Streaming text preview */}
-        {streamingText && phase === 'analyzing' && (
-          <div className="bg-bg-secondary rounded-lg p-4 max-h-40 overflow-y-auto text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-accent-yellow" />
-              <span className="text-xs font-medium text-text-muted">Claude válasza</span>
+        {/* Design phrases animation */}
+        {phase === 'analyzing' && (
+          <div className="bg-bg-secondary rounded-lg p-6">
+            <div className="flex items-center justify-center gap-3">
+              <Sparkles className="w-5 h-5 text-accent-yellow animate-pulse" />
+              <span
+                key={phraseIndex}
+                className="text-lg font-medium text-text-primary animate-fade-in"
+              >
+                {currentPhrase}
+              </span>
+              <span className="inline-block w-2 h-5 bg-accent-yellow animate-pulse rounded-sm" />
             </div>
-            <p className="text-sm text-text-secondary font-mono whitespace-pre-wrap">
-              {streamingText.slice(-500)}
-              <span className="inline-block w-2 h-4 bg-accent-yellow animate-pulse ml-1" />
-            </p>
           </div>
         )}
 
         {/* Tips while waiting */}
-        {phase === 'analyzing' && !streamingText && (
+        {phase === 'start' && (
           <div className="bg-highlight-yellow rounded-lg p-4 text-left">
             <p className="text-sm text-text-primary">
               <strong>Tudtad?</strong> A Brandguide 100 pontos rendszere Paul Rand, a 20. század

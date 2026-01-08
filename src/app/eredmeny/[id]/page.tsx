@@ -294,7 +294,7 @@ export default function ResultPage() {
         <Card className="bg-text-primary text-white">
           <CardContent className="py-8 text-center">
             <h2 className="text-2xl font-bold mb-3">
-              Szeretnéd továbbfejleszteni a brandodat?
+              Szeretnéd továbbfejleszteni a brandedet?
             </h2>
             <p className="text-gray-300 mb-6 max-w-xl mx-auto">
               A Brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától
