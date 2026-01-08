@@ -40,7 +40,7 @@ const designPhrases = [
 
 const phases = [
   { id: 'start', label: 'Elemzés indítása', icon: Sparkles },
-  { id: 'analyzing', label: 'Claude elemzi a logót', icon: Brain },
+  { id: 'analyzing', label: 'Brandguide elemzi a logót', icon: Brain },
   { id: 'processing', label: 'Eredmények feldolgozása', icon: Loader2 },
   { id: 'saving', label: 'Mentés adatbázisba', icon: Database },
   { id: 'complete', label: 'Kész!', icon: CheckCircle },
