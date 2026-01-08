@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardContent } from '@/components/ui';
-import { DropZone, ColorPicker, LevelSelector } from '@/components/upload';
+import { DropZone, ColorPicker, LevelSelector, StreamingLoader } from '@/components/upload';
 import { TestLevel } from '@/types';
 import { fileToBase64, getMediaType } from '@/lib/utils';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+
+type Phase = 'start' | 'analyzing' | 'processing' | 'saving' | 'complete';
 
 export default function TestPage() {
   const router = useRouter();
@@ -16,7 +18,12 @@ export default function TestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async () => {
+  // Streaming state
+  const [streamingStatus, setStreamingStatus] = useState('');
+  const [streamingPhase, setStreamingPhase] = useState<Phase>('start');
+  const [streamingText, setStreamingText] = useState('');
+
+  const handleSubmit = useCallback(async () => {
     if (!logo) {
       setError('Kérlek töltsd fel a logódat!');
       return;
@@ -24,6 +31,9 @@ export default function TestPage() {
 
     setIsSubmitting(true);
     setError(null);
+    setStreamingText('');
+    setStreamingStatus('Elemzés indítása...');
+    setStreamingPhase('start');
 
     try {
       const base64 = await fileToBase64(logo);
@@ -43,19 +53,93 @@ export default function TestPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Hiba történt az elemzés során');
+        // Check if it's JSON error response
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Hiba történt az elemzés során');
+        }
+        throw new Error('Hiba történt az elemzés során');
       }
 
-      const data = await response.json();
-      router.push(`/eredmeny/${data.id}`);
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Nem sikerült olvasni a választ');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7);
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+
+              switch (currentEvent) {
+                case 'status':
+                  setStreamingStatus(parsed.message);
+                  setStreamingPhase(parsed.phase as Phase);
+                  break;
+                case 'chunk':
+                  setStreamingText((prev) => prev + parsed.text);
+                  break;
+                case 'complete':
+                  setStreamingPhase('complete');
+                  setStreamingStatus('Kész!');
+                  // Redirect to results
+                  setTimeout(() => {
+                    router.push(`/eredmeny/${parsed.id}`);
+                  }, 500);
+                  break;
+                case 'error':
+                  throw new Error(parsed.message);
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                console.warn('Failed to parse SSE data:', data);
+              } else {
+                throw e;
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('Analysis error:', err);
       setError(err instanceof Error ? err.message : 'Ismeretlen hiba történt');
-    } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [logo, testLevel, colors, router]);
+
+  // Show streaming loader when submitting
+  if (isSubmitting) {
+    return (
+      <div className="min-h-screen bg-bg-secondary py-8 md:py-12">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <StreamingLoader
+            status={streamingStatus}
+            phase={streamingPhase}
+            streamingText={streamingText}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg-secondary py-8 md:py-12">
@@ -117,21 +201,11 @@ export default function TestPage() {
             <Button
               size="lg"
               onClick={handleSubmit}
-              disabled={!logo || isSubmitting}
-              isLoading={isSubmitting}
+              disabled={!logo}
               className="min-w-[200px]"
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Elemzés folyamatban...
-                </>
-              ) : (
-                <>
-                  Elemzés indítása
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </>
-              )}
+              Elemzés indítása
+              <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </div>
 
