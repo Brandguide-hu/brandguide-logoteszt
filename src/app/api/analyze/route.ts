@@ -121,8 +121,19 @@ export async function POST(request: NextRequest) {
         throw new Error('Nem sikerült feldolgozni az elemzést');
       }
 
-      // Validate and ensure rating is correct
-      const score = analysisData.osszpontszam;
+      // Calculate actual score from criteria (override AI's total if wrong)
+      const szempontok = analysisData.szempontok;
+      const calculatedScore =
+        (szempontok.megkulonboztethetoseg?.pont || 0) +
+        (szempontok.egyszuruseg?.pont || 0) +
+        (szempontok.alkalmazhatosag?.pont || 0) +
+        (szempontok.emlekezetesseg?.pont || 0) +
+        (szempontok.idotallosasg?.pont || 0) +
+        (szempontok.univerzalitas?.pont || 0) +
+        (szempontok.lathatosag?.pont || 0);
+
+      // Use calculated score to ensure consistency
+      const score = calculatedScore;
       const rating = getRatingFromScore(score);
 
       // Build the result object

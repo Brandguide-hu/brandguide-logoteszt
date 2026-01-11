@@ -1,9 +1,9 @@
 import { Rating } from '@/types';
 
 export function getRatingFromScore(score: number): Rating {
-  if (score >= 90) return 'Kiváló';
-  if (score >= 75) return 'Jó';
-  if (score >= 50) return 'Fejlesztendő';
+  if (score >= 85) return 'Kiváló';
+  if (score >= 65) return 'Jó';
+  if (score >= 45) return 'Fejlesztendő';
   return 'Újragondolandó';
 }
 
