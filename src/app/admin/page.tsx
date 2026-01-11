@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui';
-import { Loader2, ExternalLink, Calendar, Award, Layers, Trash2 } from 'lucide-react';
+import { Loader2, ExternalLink, Calendar, Award, Layers, Trash2, Copy, Check } from 'lucide-react';
 
 interface AnalysisRow {
   id: string;
@@ -22,6 +22,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyJsonLink = async (id: string) => {
+    const url = `https://brandguide-logotest.netlify.app/api/result/${id}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Biztosan törölni szeretnéd ezt az elemzést?')) return;
@@ -156,6 +164,9 @@ export default function AdminPage() {
                         Szint
                       </div>
                     </th>
+                    <th className="text-left py-4 px-4 text-text-muted font-medium text-sm">
+                      JSON
+                    </th>
                     <th className="text-right py-4 px-4 text-text-muted font-medium text-sm">
                       Művelet
                     </th>
@@ -207,6 +218,27 @@ export default function AdminPage() {
                         }`}>
                           {getTestLevelLabel(analysis.test_level)}
                         </span>
+                      </td>
+
+                      {/* JSON link */}
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => handleCopyJsonLink(analysis.id)}
+                          className="inline-flex items-center gap-1 text-info hover:text-blue-700 font-medium text-sm transition-colors"
+                          title="JSON link másolása"
+                        >
+                          {copiedId === analysis.id ? (
+                            <>
+                              <Check className="w-4 h-4 text-success" />
+                              <span className="text-success">Másolva!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Link</span>
+                            </>
+                          )}
+                        </button>
                       </td>
 
                       {/* Action */}
