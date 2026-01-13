@@ -393,3 +393,57 @@ className="transition-transform duration-300 group-hover:translate-x-1"
 - **Icons:** @untitledui/icons
 - **Fonts:** Oedenburg Sans (self-hosted in /public/fonts/)
 - **Language:** Hungarian UI text (hu-HU locale)
+
+---
+
+## Project Setup
+
+To use this design system in a new project, install dependencies:
+
+```bash
+npm install @untitledui/icons tailwindcss@latest @tailwindcss/typography tailwindcss-animate
+```
+
+Copy these files from an existing Brandguide project:
+1. `/public/fonts/` - Oedenburg Sans font files (woff, woff2)
+2. `/src/styles/theme.css` - CSS variables and color tokens
+3. `/src/styles/globals.css` - Font-face declarations and base styles
+4. `/.claude/skills/brandguide-design-system.md` - This file
+
+### Commonly Used Icons
+
+```tsx
+import {
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  AlertCircle,
+  Upload01,
+  Share07,
+  Copy01,
+  RefreshCw05,
+  ThumbsUp,
+  ThumbsDown,
+  Clock,
+  Calendar,
+  Trash01,
+  Eye,
+  EyeOff,
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Menu01,
+  Home01,
+  Settings01,
+  User01,
+  Mail01,
+  Phone01,
+  Link01,
+  Image01,
+  File01,
+  Folder01,
+} from "@untitledui/icons";
+```
