@@ -2,6 +2,34 @@
 @import "./theme.css";
 @import "./typography.css";
 
+/* Oedenburg Sans Font Family */
+@font-face {
+    font-family: 'Oedenburg Sans';
+    src: url('/fonts/oedenburg_sans_vario_1.3-light-webfont.woff2') format('woff2'),
+         url('/fonts/oedenburg_sans_vario_1.3-light-webfont.woff') format('woff');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Oedenburg Sans';
+    src: url('/fonts/oedenburg_sans_vario_1.3-regular-webfont.woff2') format('woff2'),
+         url('/fonts/oedenburg_sans_vario_1.3-regular-webfont.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Oedenburg Sans';
+    src: url('/fonts/oedenburg_sans_vario_1.3-bold-webfont.woff2') format('woff2'),
+         url('/fonts/oedenburg_sans_vario_1.3-bold-webfont.woff') format('woff');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 @plugin "@tailwindcss/typography";
 @plugin "tailwindcss-react-aria-components";
 @plugin "tailwindcss-animate";
