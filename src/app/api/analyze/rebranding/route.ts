@@ -7,6 +7,7 @@ import { getRatingFromScore } from '@/lib/utils';
 interface RebrandingResult {
   id: string;
   type: 'rebranding';
+  osszefoglalo: string;
   oldLogoAnalysis: {
     osszpontszam: number;
     minosites: string;
@@ -21,6 +22,7 @@ interface RebrandingResult {
   };
   comparison: {
     successRate: number;
+    criteriaChanges: Record<string, { valtozas: string }>;
     improvements: string[];
     regressions: string[];
     recommendations: string[];
@@ -41,9 +43,15 @@ function calculateScore(szempontok: Record<string, { pont: number }>) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('Rebranding API called');
+  console.log('ENV keys:', Object.keys(process.env).filter(k => k.includes('ANTHROPIC') || k.includes('SUPABASE')));
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  console.log('API Key exists:', !!apiKey);
+  console.log('API Key length:', apiKey?.length);
 
   if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY is not set!');
     return new Response(
       JSON.stringify({ error: 'API kulcs nincs beállítva' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -162,6 +170,7 @@ export async function POST(request: NextRequest) {
       const result: RebrandingResult = {
         id: '',
         type: 'rebranding',
+        osszefoglalo: analysisData.osszefoglalo || '',
         oldLogoAnalysis: {
           osszpontszam: oldScore,
           minosites: getRatingFromScore(oldScore),
@@ -176,6 +185,7 @@ export async function POST(request: NextRequest) {
         },
         comparison: {
           successRate: Math.round(successRate * 10) / 10,
+          criteriaChanges: analysisData.comparison?.criteriaChanges || {},
           improvements: analysisData.comparison?.improvements || [],
           regressions: analysisData.comparison?.regressions || [],
           recommendations: analysisData.comparison?.recommendations || [],

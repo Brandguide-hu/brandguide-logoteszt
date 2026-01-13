@@ -230,7 +230,12 @@ export const getRebrandingResponseFormat = (): string => {
       "indoklas": "<2-3 mondat>"
     }`;
 
+  const criteriaChangeFormat = `{
+      "valtozas": "<rövid indoklás miért változott a pontszám>"
+    }`;
+
   return `{
+  "osszefoglalo": "<3-5 mondatos átfogó értékelés a rebranding sikerességéről, a főbb változásokról és az összképről>",
   "oldLogoAnalysis": {
     "osszpontszam": <0-100>,
     "minosites": "<kategória>",
@@ -261,6 +266,15 @@ export const getRebrandingResponseFormat = (): string => {
   },
   "comparison": {
     "successRate": <százalékos változás, negatív ha romlott>,
+    "criteriaChanges": {
+      "megkulonboztethetoseg": ${criteriaChangeFormat},
+      "egyszuruseg": ${criteriaChangeFormat},
+      "alkalmazhatosag": ${criteriaChangeFormat},
+      "emlekezetesseg": ${criteriaChangeFormat},
+      "idotallosasg": ${criteriaChangeFormat},
+      "univerzalitas": ${criteriaChangeFormat},
+      "lathatosag": ${criteriaChangeFormat}
+    },
     "improvements": ["<hol és miért lett jobb az új logó>"],
     "regressions": ["<hol és miért volt erősebb a régi>"],
     "recommendations": ["<mit érdemes még finomítani az új logón>"]

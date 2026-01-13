@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
@@ -17,6 +17,7 @@ import { ArrowRight, ArrowLeft, RefreshCw05, Copy01, Check, Share07, AlertCircle
 
 export default function ResultPage() {
     const params = useParams();
+    const router = useRouter();
     const id = params.id as string;
 
     const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -33,6 +34,13 @@ export default function ResultPage() {
                 if (dbError) throw dbError;
                 if (!data) throw new Error("Eredmény nem található");
 
+                // Check if this is a rebranding result and redirect
+                const resultData = data.result as { type?: string };
+                if (resultData?.type === 'rebranding') {
+                    router.replace(`/eredmeny/rebranding/${id}`);
+                    return;
+                }
+
                 setResult(data.result as unknown as AnalysisResult);
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
             } catch (err) {
@@ -44,7 +52,7 @@ export default function ResultPage() {
         }
 
         fetchResult();
-    }, [id]);
+    }, [id, router]);
 
     const getShareUrl = () => {
         if (typeof window !== "undefined") {

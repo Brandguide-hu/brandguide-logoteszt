@@ -11,8 +11,18 @@ interface AnalysisRow {
     test_level: string;
     logo_base64: string;
     result: {
-        osszpontszam: number;
-        minosites: string;
+        type?: string;
+        osszpontszam?: number;
+        minosites?: string;
+        // Rebranding specific
+        oldLogoAnalysis?: {
+            osszpontszam: number;
+            minosites: string;
+        };
+        newLogoAnalysis?: {
+            osszpontszam: number;
+            minosites: string;
+        };
     };
 }
 
@@ -86,7 +96,11 @@ export default function AdminPage() {
         return "bg-red-50 text-red-700";
     };
 
-    const getTestLevelLabel = (level: string) => {
+    const getTestLevelLabel = (level: string, resultType?: string) => {
+        // Check if it's a rebranding type
+        if (resultType === "rebranding" || level === "rebranding") {
+            return { label: "Rebranding", style: "bg-purple-100 text-purple-700" };
+        }
         switch (level) {
             case "professional":
                 return { label: "Profi", style: "bg-gray-900 text-white" };
@@ -95,6 +109,30 @@ export default function AdminPage() {
             default:
                 return { label: "Alap", style: "bg-gray-100 text-gray-600" };
         }
+    };
+
+    // Helper to get score for display (handles both normal and rebranding results)
+    const getDisplayScore = (result: AnalysisRow["result"]) => {
+        if (result.type === "rebranding" && result.newLogoAnalysis) {
+            return result.newLogoAnalysis.osszpontszam;
+        }
+        return result.osszpontszam || 0;
+    };
+
+    // Helper to get rating for display
+    const getDisplayRating = (result: AnalysisRow["result"]) => {
+        if (result.type === "rebranding" && result.newLogoAnalysis) {
+            return result.newLogoAnalysis.minosites;
+        }
+        return result.minosites || "";
+    };
+
+    // Helper to get the correct result page URL
+    const getResultUrl = (analysis: AnalysisRow) => {
+        if (analysis.result.type === "rebranding") {
+            return `/eredmeny/rebranding/${analysis.id}`;
+        }
+        return `/eredmeny/${analysis.id}`;
     };
 
     // Loading state
@@ -168,7 +206,11 @@ export default function AdminPage() {
                     ) : (
                         <div className="space-y-3">
                             {analyses.map((analysis, index) => {
-                                const levelInfo = getTestLevelLabel(analysis.test_level);
+                                const levelInfo = getTestLevelLabel(analysis.test_level, analysis.result.type);
+                                const displayScore = getDisplayScore(analysis.result);
+                                const displayRating = getDisplayRating(analysis.result);
+                                const isRebranding = analysis.result.type === "rebranding";
+
                                 return (
                                     <div
                                         key={analysis.id}
@@ -188,8 +230,8 @@ export default function AdminPage() {
                                         <div className="min-w-0 flex-1">
                                             <div className="mb-1 flex items-center gap-2">
                                                 {/* Score */}
-                                                <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${getScoreStyles(analysis.result.osszpontszam)}`}>
-                                                    {analysis.result.osszpontszam}/100
+                                                <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${getScoreStyles(displayScore)}`}>
+                                                    {isRebranding ? `${analysis.result.oldLogoAnalysis?.osszpontszam || 0} → ${displayScore}` : `${displayScore}/100`}
                                                 </span>
                                                 {/* Test level */}
                                                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${levelInfo.style}`}>
@@ -200,7 +242,7 @@ export default function AdminPage() {
                                                 <Calendar className="size-3.5" />
                                                 <span>{formatDate(analysis.created_at)}</span>
                                                 <span className="text-gray-300">•</span>
-                                                <span>{analysis.result.minosites}</span>
+                                                <span>{displayRating}</span>
                                             </div>
                                         </div>
 
@@ -225,7 +267,7 @@ export default function AdminPage() {
                                             </button>
 
                                             {/* Open */}
-                                            <Link href={`/eredmeny/${analysis.id}`}>
+                                            <Link href={getResultUrl(analysis)}>
                                                 <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:shadow-sm">
                                                     <LinkExternal01 className="size-4" />
                                                     Megnyitás
