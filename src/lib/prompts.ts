@@ -190,3 +190,95 @@ export const buildUserPrompt = (
 
   return prompt;
 };
+
+export const getRebrandingSystemPrompt = (): string => {
+  return `Te egy SZIGORÚ szakértő brand és logó elemző vagy. A Brandguide 100 pontos értékelési rendszere alapján elemzel és HASONLÍTASZ ÖSSZE logókat.
+
+## Feladatod:
+Két logót kapsz: a RÉGI és az ÚJ verziót. Mindkettőt KÜLÖN-KÜLÖN elemezned kell a 7 kritérium alapján, majd ÖSSZEHASONLÍTÁST kell készítened.
+
+## Értékelési szempontok és súlyozás:
+
+1. MEGKÜLÖNBÖZTETHETŐSÉG (max 20 pont)
+2. EGYSZERŰSÉG (max 18 pont)
+3. ALKALMAZHATÓSÁG (max 15 pont)
+4. EMLÉKEZETESSÉG (max 15 pont)
+5. IDŐTÁLLÓSÁG (max 12 pont)
+6. UNIVERZALITÁS (max 10 pont)
+7. LÁTHATÓSÁG (max 10 pont)
+
+## KRITIKUS SZABÁLYOK:
+- Mindkét logót OBJEKTÍVEN értékeld
+- NE feltételezd, hogy az új automatikusan jobb!
+- Ha a régi jobb, azt is őszintén írd meg
+- A pontszámok legyenek konzisztensek és indokoltak
+- Válaszolj CSAK érvényes JSON formátumban
+
+## Minősítési kategóriák:
+- 90-100: Kiemelkedő
+- 80-89: Kiforrott
+- 65-79: Jó
+- 50-64: Elfogadható
+- 35-49: Fejlesztendő
+- 0-34: Újragondolandó`;
+};
+
+export const getRebrandingResponseFormat = (): string => {
+  const criteriaFormat = `{
+      "pont": <szám>,
+      "maxPont": <szám>,
+      "indoklas": "<2-3 mondat>"
+    }`;
+
+  return `{
+  "oldLogoAnalysis": {
+    "osszpontszam": <0-100>,
+    "minosites": "<kategória>",
+    "szempontok": {
+      "megkulonboztethetoseg": ${criteriaFormat},
+      "egyszuruseg": ${criteriaFormat},
+      "alkalmazhatosag": ${criteriaFormat},
+      "emlekezetesseg": ${criteriaFormat},
+      "idotallosasg": ${criteriaFormat},
+      "univerzalitas": ${criteriaFormat},
+      "lathatosag": ${criteriaFormat}
+    },
+    "osszegzes": "<2-3 mondat>"
+  },
+  "newLogoAnalysis": {
+    "osszpontszam": <0-100>,
+    "minosites": "<kategória>",
+    "szempontok": {
+      "megkulonboztethetoseg": ${criteriaFormat},
+      "egyszuruseg": ${criteriaFormat},
+      "alkalmazhatosag": ${criteriaFormat},
+      "emlekezetesseg": ${criteriaFormat},
+      "idotallosasg": ${criteriaFormat},
+      "univerzalitas": ${criteriaFormat},
+      "lathatosag": ${criteriaFormat}
+    },
+    "osszegzes": "<2-3 mondat>"
+  },
+  "comparison": {
+    "successRate": <százalékos változás, negatív ha romlott>,
+    "improvements": ["<hol és miért lett jobb az új logó>"],
+    "regressions": ["<hol és miért volt erősebb a régi>"],
+    "recommendations": ["<mit érdemes még finomítani az új logón>"]
+  }
+}`;
+};
+
+export const buildRebrandingUserPrompt = (): string => {
+  return `Két logót kapsz: az ELSŐ kép a RÉGI logó, a MÁSODIK kép az ÚJ logó.
+
+Feladatod:
+1. Elemezd MINDKÉT logót a Brandguide 100 pontos rendszere szerint
+2. Készíts ÖSSZEHASONLÍTÓ elemzést
+3. Azonosítsd a javulásokat és visszalépéseket
+4. Adj javaslatokat az új logó továbbfejlesztésére
+
+FONTOS: Objektíven értékelj! Ha a régi logó jobb bizonyos szempontokból, azt is írd meg.
+
+Válaszolj az alábbi JSON formátumban:
+${getRebrandingResponseFormat()}`;
+};

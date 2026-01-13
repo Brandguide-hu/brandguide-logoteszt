@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01 } from "@untitledui/icons";
+import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01, RefreshCw05 } from "@untitledui/icons";
 
 const steps = [
     {
@@ -209,63 +209,98 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Test Levels */}
+            {/* Test Packages */}
             <section className="px-4 py-24 sm:px-6 md:py-32 lg:px-8">
-                <div className="mx-auto max-w-4xl">
+                <div className="mx-auto max-w-6xl">
                     <div className="mb-16 text-center">
                         <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
-                            Teszt szintek
+                            Csomagok
                         </span>
                         <h2 className="text-3xl font-light text-gray-900 md:text-4xl">
-                            Válaszd ki a szintet
+                            Válaszd ki a tesztet
                         </h2>
                     </div>
 
-                    <div className="grid gap-6 md:grid-cols-2">
-                        {/* Basic Test */}
-                        <div className="group rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
-                            <div className="mb-6 inline-flex rounded-xl bg-gray-50 p-3">
-                                <BarChart01 className="size-6 text-gray-400" />
+                    <div className="grid gap-6 md:grid-cols-3">
+                        {/* Alap Test */}
+                        <Link href="/teszt?level=basic" className="group">
+                            <div className="h-full rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
+                                <div className="mb-6 inline-flex rounded-xl bg-gray-50 p-3">
+                                    <BarChart01 className="size-6 text-gray-400" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-900">Alap teszt</h3>
+                                <p className="mb-6 text-sm text-gray-500">
+                                    Gyors elemzés a 7 szempont szerint. Ideális első visszajelzéshez.
+                                </p>
+                                <ul className="mb-8 space-y-3">
+                                    {["1 logó feltöltése", "Összesített pontszám", "Rövid összefoglaló", "Fő erősség és gyengeség"].map((item) => (
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                                            <CheckCircle className="size-4 text-gray-300" />
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-gray-400">~10 másodperc</span>
+                                    <ArrowRight className="size-4 text-gray-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-900" />
+                                </div>
                             </div>
-                            <h3 className="mb-2 text-xl font-medium text-gray-900">Alap teszt</h3>
-                            <p className="mb-6 text-sm text-gray-500">
-                                Gyors elemzés a 7 szempont szerint. Ideális első visszajelzéshez.
-                            </p>
-                            <ul className="mb-8 space-y-3">
-                                {["Logó feltöltése", "7 szempont értékelés", "Összpontszám + javaslatok"].map((item) => (
-                                    <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
-                                        <CheckCircle className="size-4 text-gray-300" />
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                            <span className="text-xs text-gray-400">~30 másodperc</span>
-                        </div>
+                        </Link>
 
-                        {/* Detailed Test */}
-                        <div className="group relative rounded-2xl border-2 border-[#fff012]/50 bg-white p-8 transition-all duration-300 hover:border-[#fff012] hover:shadow-lg hover:shadow-[#fff012]/10">
-                            {/* Recommended */}
-                            <div className="absolute -top-3 right-6 rounded-full bg-[#fff012] px-3 py-1 text-xs font-medium text-gray-900">
-                                Ajánlott
-                            </div>
+                        {/* Részletes Test */}
+                        <Link href="/teszt?level=detailed" className="group">
+                            <div className="relative h-full rounded-2xl border-2 border-[#fff012]/50 bg-white p-8 transition-all duration-300 hover:border-[#fff012] hover:shadow-lg hover:shadow-[#fff012]/10">
+                                {/* Recommended */}
+                                <div className="absolute -top-3 right-6 rounded-full bg-[#fff012] px-3 py-1 text-xs font-medium text-gray-900">
+                                    Ajánlott
+                                </div>
 
-                            <div className="mb-6 inline-flex rounded-xl bg-[#fff012]/20 p-3">
-                                <Stars01 className="size-6 text-gray-700" />
+                                <div className="mb-6 inline-flex rounded-xl bg-[#fff012]/20 p-3">
+                                    <Stars01 className="size-6 text-gray-700" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-900">Részletes teszt</h3>
+                                <p className="mb-6 text-sm text-gray-500">
+                                    Teljes körű, professzionális logó audit.
+                                </p>
+                                <ul className="mb-8 space-y-3">
+                                    {["1 logó feltöltése", "Kritériumonkénti pontszám", "Radar chart vizualizáció", "Részletes elemzés + javaslatok"].map((item) => (
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                                            <CheckCircle className="size-4 text-[#fff012]" />
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-gray-400">~20 másodperc</span>
+                                    <ArrowRight className="size-4 text-gray-400 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-900" />
+                                </div>
                             </div>
-                            <h3 className="mb-2 text-xl font-medium text-gray-900">Részletes teszt</h3>
-                            <p className="mb-6 text-sm text-gray-500">
-                                A logón túl a színpalettát és tipográfiát is elemezzük.
-                            </p>
-                            <ul className="mb-8 space-y-3">
-                                {["Minden az alap tesztből", "Színpaletta elemzés", "Tipográfia értékelés", "Radar chart vizualizáció"].map((item) => (
-                                    <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
-                                        <CheckCircle className="size-4 text-[#fff012]" />
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                            <span className="text-xs text-gray-400">~1-2 perc</span>
-                        </div>
+                        </Link>
+
+                        {/* Rebranding Test */}
+                        <Link href="/teszt/rebranding" className="group">
+                            <div className="h-full rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
+                                <div className="mb-6 inline-flex rounded-xl bg-gray-50 p-3">
+                                    <RefreshCw05 className="size-6 text-gray-400" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-900">Rebranding teszt</h3>
+                                <p className="mb-6 text-sm text-gray-500">
+                                    Régi és új logó objektív összehasonlítása.
+                                </p>
+                                <ul className="mb-8 space-y-3">
+                                    {["2 logó feltöltése", "Összehasonlító radar chart", "Kritériumonkénti változás", "Javulások és visszalépések"].map((item) => (
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                                            <CheckCircle className="size-4 text-gray-300" />
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-gray-400">~40 másodperc</span>
+                                    <ArrowRight className="size-4 text-gray-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-900" />
+                                </div>
+                            </div>
+                        </Link>
                     </div>
                 </div>
             </section>
