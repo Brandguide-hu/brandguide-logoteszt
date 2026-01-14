@@ -214,6 +214,13 @@ Két logót kapsz: a RÉGI és az ÚJ verziót. Mindkettőt KÜLÖN-KÜLÖN elem
 - A pontszámok legyenek konzisztensek és indokoltak
 - Válaszolj CSAK érvényes JSON formátumban
 
+## FONTOS - Visszalépések (regressions) szabályai:
+- CSAK akkor írj visszalépést, ha TÉNYLEGESEN CSÖKKENT a pontszám az adott kritériumnál
+- Ha egy kritériumnál az új logó UGYANANNYI vagy TÖBB pontot kapott, az NEM visszalépés!
+- NE találj ki spekulatív hátrányokat - csak a konkrét pontveszteségeket említsd
+- Ha nincs valódi visszalépés (minden kritériumnál javult vagy stagnált), a "regressions" lista LEGYEN ÜRES: []
+- A visszalépések listája lehet üres tömb, ez teljesen rendben van sikeres rebrandingnél!
+
 ## Minősítési kategóriák:
 - 90-100: Kiemelkedő
 - 80-89: Kiforrott
@@ -275,8 +282,8 @@ export const getRebrandingResponseFormat = (): string => {
       "univerzalitas": ${criteriaChangeFormat},
       "lathatosag": ${criteriaChangeFormat}
     },
-    "improvements": ["<hol és miért lett jobb az új logó>"],
-    "regressions": ["<hol és miért volt erősebb a régi>"],
+    "improvements": ["<hol és miért lett jobb az új logó - csak ahol NŐTT a pontszám>"],
+    "regressions": ["<CSAK olyan kritériumok ahol CSÖKKENT a pontszám - ha nincs ilyen, üres tömb: []>"],
     "recommendations": ["<mit érdemes még finomítani az új logón>"]
   }
 }`;
@@ -288,10 +295,13 @@ export const buildRebrandingUserPrompt = (): string => {
 Feladatod:
 1. Elemezd MINDKÉT logót a Brandguide 100 pontos rendszere szerint
 2. Készíts ÖSSZEHASONLÍTÓ elemzést
-3. Azonosítsd a javulásokat és visszalépéseket
+3. Azonosítsd a javulásokat (ahol NŐTT a pontszám) és visszalépéseket (ahol CSÖKKENT a pontszám)
 4. Adj javaslatokat az új logó továbbfejlesztésére
 
-FONTOS: Objektíven értékelj! Ha a régi logó jobb bizonyos szempontokból, azt is írd meg.
+FONTOS:
+- Objektíven értékelj! Ha a régi logó jobb bizonyos szempontokból, azt is írd meg.
+- A "regressions" listába CSAK akkor írj elemet, ha egy kritériumnál TÉNYLEGESEN CSÖKKENT a pontszám!
+- Ha minden kritériumnál javult vagy változatlan a pontszám, a regressions legyen üres tömb: []
 
 Válaszolj az alábbi JSON formátumban:
 ${getRebrandingResponseFormat()}`;
