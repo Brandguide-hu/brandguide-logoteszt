@@ -268,15 +268,18 @@ export default function RebrandingResultPage() {
         <div className="min-h-screen bg-white">
             {/* Header */}
             <div className="border-b border-gray-100 px-4 py-4 sm:px-6 lg:px-8">
-                <div className="mx-auto flex max-w-5xl items-center justify-between">
+                <div className="mx-auto grid max-w-5xl grid-cols-3 items-center">
                     <Link
-                        href="/teszt/rebranding"
+                        href="/teszt"
                         className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-gray-900"
                     >
                         <ArrowLeft className="size-4" />
                         Új teszt
                     </Link>
-                    <span className="text-xs font-medium uppercase tracking-widest text-gray-400">Rebranding eredmény</span>
+                    <Link href="/" className="justify-self-center">
+                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
+                    </Link>
+                    <div></div>
                 </div>
             </div>
 

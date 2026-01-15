@@ -46,8 +46,17 @@ const ratings = [
 export default function Home() {
     return (
         <div className="min-h-screen bg-white">
+            {/* Header */}
+            <header className="px-4 py-4 sm:px-6 lg:px-8">
+                <div className="mx-auto flex max-w-5xl justify-center">
+                    <Link href="/">
+                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
+                    </Link>
+                </div>
+            </header>
+
             {/* Hero Section */}
-            <section className="relative px-4 pb-24 pt-20 sm:px-6 md:pb-32 md:pt-28 lg:px-8">
+            <section className="relative px-4 pb-24 pt-12 sm:px-6 md:pb-32 md:pt-16 lg:px-8">
                 <div className="mx-auto max-w-4xl text-center">
                     {/* Subtle badge */}
                     <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50/80 px-4 py-2 text-sm text-gray-600 opacity-0 animate-[fadeIn_0.6s_ease_forwards]">
@@ -58,7 +67,7 @@ export default function Home() {
                     {/* Main headline with stagger animation */}
                     <h1 className="mb-8 text-4xl font-light tracking-tight text-gray-900 sm:text-5xl md:text-6xl lg:text-7xl">
                         <span className="block opacity-0 animate-[fadeSlideUp_0.8s_ease_0.1s_forwards]">
-                            A logó nem
+                            A jó logó nem
                         </span>
                         <span className="block opacity-0 animate-[fadeSlideUp_0.8s_ease_0.2s_forwards]">
                             <em className="relative font-normal not-italic">
@@ -70,7 +79,7 @@ export default function Home() {
                     </h1>
 
                     <p className="mx-auto mb-12 max-w-xl text-lg text-gray-500 opacity-0 animate-[fadeIn_0.8s_ease_0.4s_forwards] md:text-xl">
-                        Szigorú szakmai szempontoknak kell megfelelnie. Mi megmutatjuk, miben erős és miben fejleszthető.
+                        Szigorú szakmai szempontoknak kell megfelelnie. Mi megmutatjuk, miben erős és miben fejleszthető a feltöltött logó. Elemeztesd most!
                     </p>
 
                     {/* CTA */}
@@ -121,7 +130,7 @@ export default function Home() {
                                 style={{ animationDelay: `${0.2 + index * 0.15}s` }}
                             >
                                 {/* Number */}
-                                <div className="mb-6 text-6xl font-extralight text-gray-200 transition-colors duration-500 group-hover:text-[#fff012]">
+                                <div className="mb-6 text-6xl font-extralight text-[#fff012]">
                                     {step.num}
                                 </div>
 
@@ -139,7 +148,7 @@ export default function Home() {
             </section>
 
             {/* Brandguide 100 Section */}
-            <section className="bg-gray-50/50 px-4 py-24 sm:px-6 md:py-32 lg:px-8">
+            <section className="bg-gray-100 px-4 py-24 sm:px-6 md:py-32 lg:px-8">
                 <div className="mx-auto max-w-5xl">
                     <div className="grid items-start gap-16 lg:grid-cols-2">
                         {/* Left content */}
@@ -222,30 +231,33 @@ export default function Home() {
                     </div>
 
                     <div className="grid gap-6 md:grid-cols-3">
-                        {/* Alap Test */}
-                        <Link href="/teszt?level=basic" className="group">
-                            <div className="h-full rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
-                                <div className="mb-6 inline-flex rounded-xl bg-gray-50 p-3">
-                                    <BarChart01 className="size-6 text-gray-400" />
+                        {/* Alap Test - DISABLED */}
+                        <div className="group cursor-not-allowed opacity-50">
+                            <div className="relative h-full rounded-2xl border border-gray-100 bg-gray-50 p-8">
+                                <div className="absolute -top-2 right-4 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500">
+                                    Hamarosan
                                 </div>
-                                <h3 className="mb-2 text-xl font-medium text-gray-900">Alap teszt</h3>
-                                <p className="mb-6 text-sm text-gray-500">
+                                <div className="mb-6 inline-flex rounded-xl bg-gray-100 p-3">
+                                    <BarChart01 className="size-6 text-gray-300" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-400">Alap teszt</h3>
+                                <p className="mb-6 text-sm text-gray-400">
                                     Gyors elemzés a 7 szempont szerint. Ideális első visszajelzéshez.
                                 </p>
                                 <ul className="mb-8 space-y-3">
                                     {["1 logó feltöltése", "Összesített pontszám", "Rövid összefoglaló", "Fő erősség és gyengeség"].map((item) => (
-                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
-                                            <CheckCircle className="size-4 text-gray-300" />
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-400">
+                                            <CheckCircle className="size-4 text-gray-200" />
                                             {item}
                                         </li>
                                     ))}
                                 </ul>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-400">~10 másodperc</span>
-                                    <ArrowRight className="size-4 text-gray-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-900" />
+                                    <span className="text-xs text-gray-300">~10 másodperc</span>
+                                    <ArrowRight className="size-4 text-gray-200" />
                                 </div>
                             </div>
-                        </Link>
+                        </div>
 
                         {/* Részletes Test */}
                         <Link href="/teszt?level=detailed" className="group">
@@ -277,30 +289,33 @@ export default function Home() {
                             </div>
                         </Link>
 
-                        {/* Rebranding Test */}
-                        <Link href="/teszt/rebranding" className="group">
-                            <div className="h-full rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
-                                <div className="mb-6 inline-flex rounded-xl bg-gray-50 p-3">
-                                    <RefreshCw05 className="size-6 text-gray-400" />
+                        {/* Rebranding Test - DISABLED */}
+                        <div className="group cursor-not-allowed opacity-50">
+                            <div className="relative h-full rounded-2xl border border-gray-100 bg-gray-50 p-8">
+                                <div className="absolute -top-2 right-4 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500">
+                                    Hamarosan
                                 </div>
-                                <h3 className="mb-2 text-xl font-medium text-gray-900">Rebranding teszt</h3>
-                                <p className="mb-6 text-sm text-gray-500">
+                                <div className="mb-6 inline-flex rounded-xl bg-gray-100 p-3">
+                                    <RefreshCw05 className="size-6 text-gray-300" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-400">Rebranding teszt</h3>
+                                <p className="mb-6 text-sm text-gray-400">
                                     Régi és új logó objektív összehasonlítása.
                                 </p>
                                 <ul className="mb-8 space-y-3">
                                     {["2 logó feltöltése", "Összehasonlító radar chart", "Kritériumonkénti változás", "Javulások és visszalépések"].map((item) => (
-                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
-                                            <CheckCircle className="size-4 text-gray-300" />
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-400">
+                                            <CheckCircle className="size-4 text-gray-200" />
                                             {item}
                                         </li>
                                     ))}
                                 </ul>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-400">~40 másodperc</span>
-                                    <ArrowRight className="size-4 text-gray-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-900" />
+                                    <span className="text-xs text-gray-300">~40 másodperc</span>
+                                    <ArrowRight className="size-4 text-gray-200" />
                                 </div>
                             </div>
-                        </Link>
+                        </div>
                     </div>
                 </div>
             </section>

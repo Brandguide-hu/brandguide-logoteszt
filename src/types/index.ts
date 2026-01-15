@@ -1,5 +1,5 @@
 // Teszt szintek
-export type TestLevel = 'basic' | 'detailed' | 'full';
+export type TestLevel = 'basic' | 'detailed' | 'full' | 'rebranding';
 
 // Minősítési kategóriák
 export type Rating = 'Kiemelkedő' | 'Kiforrott' | 'Jó' | 'Elfogadható' | 'Fejlesztendő' | 'Újragondolandó';
@@ -33,8 +33,16 @@ export interface ColorAnalysis {
 // Tipográfia elemzés
 export interface TypographyAnalysis {
   karakter: string;
-  olvashatos: string;
+  olvashatosag: string;
   illeszkedés: string;
+  javaslatok: string[];
+}
+
+// Vizuális nyelv elemzés
+export interface VisualLanguageAnalysis {
+  formak: string;
+  arculatiElemek: string;
+  stilusEgyseg: string;
   javaslatok: string[];
 }
 
@@ -57,6 +65,7 @@ export interface AnalysisResult {
   osszegzes: string;
   szinek?: ColorAnalysis;
   tipografia?: TypographyAnalysis;
+  vizualisNyelv?: VisualLanguageAnalysis;
   createdAt: string;
   testLevel: TestLevel;
   logoUrl?: string;

@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
 import {
-    ScoreDisplay,
     RadarChart,
-    CriteriaCard,
-    StrengthsWeaknesses,
     ColorAnalysis,
     TypographyAnalysis,
+    VisualLanguageAnalysis,
+    ResultSkeleton,
 } from "@/components/results";
 import { ArrowRight, ArrowLeft, RefreshCw05, Copy01, Check, Share07, AlertCircle, ThumbsUp, ThumbsDown } from "@untitledui/icons";
 
@@ -25,6 +24,83 @@ export default function ResultPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [isRephrasing, setIsRephrasing] = useState(false);
+    const [rephrased, setRephrased] = useState(false);
+
+    // Rephrase texts with Peti style using Claude API
+    const rephraseTexts = useCallback(async (resultData: AnalysisResult) => {
+        if (rephrased || isRephrasing) return;
+
+        setIsRephrasing(true);
+        try {
+            const response = await fetch('/api/rephrase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    osszegzes: resultData.osszegzes,
+                    erossegek: resultData.erossegek,
+                    fejlesztendo: resultData.fejlesztendo,
+                    szempontok: resultData.szempontok,
+                    szinek: resultData.szinek,
+                    tipografia: resultData.tipografia,
+                    vizualisNyelv: resultData.vizualisNyelv,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Rephrase failed');
+            }
+
+            const data = await response.json();
+            if (data.success && data.rephrased) {
+                // Update result with rephrased texts
+                setResult(prev => {
+                    if (!prev) return prev;
+
+                    const updated = { ...prev };
+
+                    if (data.rephrased.osszegzes) {
+                        updated.osszegzes = data.rephrased.osszegzes;
+                    }
+                    if (data.rephrased.erossegek) {
+                        updated.erossegek = data.rephrased.erossegek;
+                    }
+                    if (data.rephrased.fejlesztendo) {
+                        updated.fejlesztendo = data.rephrased.fejlesztendo;
+                    }
+                    if (data.rephrased.szempontIndoklasok) {
+                        updated.szempontok = { ...prev.szempontok };
+                        Object.entries(data.rephrased.szempontIndoklasok).forEach(([key, indoklas]) => {
+                            if (updated.szempontok[key as CriteriaName]) {
+                                updated.szempontok[key as CriteriaName] = {
+                                    ...updated.szempontok[key as CriteriaName],
+                                    indoklas: indoklas as string,
+                                };
+                            }
+                        });
+                    }
+                    if (data.rephrased.szinek && prev.szinek) {
+                        updated.szinek = { ...prev.szinek, ...data.rephrased.szinek };
+                    }
+                    if (data.rephrased.tipografia && prev.tipografia) {
+                        updated.tipografia = { ...prev.tipografia, ...data.rephrased.tipografia };
+                    }
+                    if (data.rephrased.vizualisNyelv && prev.vizualisNyelv) {
+                        updated.vizualisNyelv = { ...prev.vizualisNyelv, ...data.rephrased.vizualisNyelv };
+                    }
+
+                    return updated;
+                });
+                setRephrased(true);
+            }
+        } catch (err) {
+            console.error('Rephrase error:', err);
+            // Silent fail - original texts remain
+        } finally {
+            setIsRephrasing(false);
+            setLoading(false); // Now show the results
+        }
+    }, [rephrased, isRephrasing]);
 
     useEffect(() => {
         async function fetchResult() {
@@ -35,24 +111,29 @@ export default function ResultPage() {
                 if (!data) throw new Error("Eredmény nem található");
 
                 // Check if this is a rebranding result and redirect
-                const resultData = data.result as { type?: string };
-                if (resultData?.type === 'rebranding') {
+                const rawResult = data.result as { type?: string };
+                if (rawResult?.type === 'rebranding') {
                     router.replace(`/eredmeny/rebranding/${id}`);
                     return;
                 }
 
-                setResult(data.result as unknown as AnalysisResult);
+                const resultData = data.result as unknown as AnalysisResult;
+                setResult(resultData);
+
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+
+                // Start rephrasing in background
+                rephraseTexts(resultData);
             } catch (err) {
                 console.error("Fetch error:", err);
                 setError("Nem sikerült betölteni az eredményt");
-            } finally {
                 setLoading(false);
             }
+            // Loading stays true until rephrase completes
         }
 
         fetchResult();
-    }, [id, router]);
+    }, [id, router, rephraseTexts]);
 
     const getShareUrl = () => {
         if (typeof window !== "undefined") {
@@ -88,16 +169,9 @@ export default function ResultPage() {
         window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "width=600,height=400");
     };
 
-    // Loading state
+    // Loading state - show skeleton UI
     if (loading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-white">
-                <div className="text-center">
-                    <div className="mx-auto mb-6 size-12 animate-spin rounded-full border-2 border-gray-200 border-t-[#fff012]" />
-                    <p className="text-gray-500">Eredmény betöltése...</p>
-                </div>
-            </div>
-        );
+        return <ResultSkeleton />;
     }
 
     // Error state
@@ -134,7 +208,7 @@ export default function ResultPage() {
         <div className="min-h-screen bg-white">
             {/* Header */}
             <div className="border-b border-gray-100 px-4 py-4 sm:px-6 lg:px-8">
-                <div className="mx-auto flex max-w-5xl items-center justify-between">
+                <div className="mx-auto grid max-w-5xl grid-cols-3 items-center">
                     <Link
                         href="/teszt"
                         className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-gray-900"
@@ -142,9 +216,10 @@ export default function ResultPage() {
                         <ArrowLeft className="size-4" />
                         Új teszt
                     </Link>
-                    <span className="text-xs font-medium uppercase tracking-widest text-gray-400">
-                        Eredmény
-                    </span>
+                    <Link href="/" className="justify-self-center">
+                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
+                    </Link>
+                    <div></div>
                 </div>
             </div>
 
@@ -266,7 +341,7 @@ export default function ResultPage() {
                             </span>
                         </div>
                         <div className="space-y-3">
-                            {Object.entries(result.szempontok).map(([key, value], index) => {
+                            {Object.entries(result.szempontok).map(([key, value]) => {
                                 const criteriaKey = key as CriteriaName;
                                 const meta = CRITERIA_META[criteriaKey];
                                 if (!meta) return null;
@@ -331,10 +406,19 @@ export default function ResultPage() {
                         </div>
                     )}
 
+                    {result.vizualisNyelv && (
+                        <div
+                            className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
+                            style={{ animationDelay: "0.7s" }}
+                        >
+                            <VisualLanguageAnalysis analysis={result.vizualisNyelv} />
+                        </div>
+                    )}
+
                     {/* Share section */}
                     <div
                         className="mb-12 rounded-xl border border-gray-100 bg-gray-50/50 p-6 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                        style={{ animationDelay: "0.7s" }}
+                        style={{ animationDelay: "0.8s" }}
                     >
                         <div className="mb-4 flex items-center gap-2">
                             <Share07 className="size-4 text-gray-400" />
@@ -381,7 +465,7 @@ export default function ResultPage() {
                     {/* Actions */}
                     <div
                         className="mb-12 flex flex-col items-center gap-4 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards] sm:flex-row sm:justify-center"
-                        style={{ animationDelay: "0.8s" }}
+                        style={{ animationDelay: "0.9s" }}
                     >
                         <Link href="/teszt">
                             <button className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:shadow-sm">
@@ -394,7 +478,7 @@ export default function ResultPage() {
                     {/* CTA */}
                     <div
                         className="rounded-2xl bg-gray-900 p-8 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards] md:p-12"
-                        style={{ animationDelay: "0.9s" }}
+                        style={{ animationDelay: "1.0s" }}
                     >
                         <span className="mb-4 inline-block rounded-full bg-[#fff012] px-3 py-1 text-xs font-medium text-gray-900">
                             Brandguide/AI

@@ -1,5 +1,7 @@
 import { TestLevel } from '@/types';
 
+// NOTE: Vision description prompt removed - now sending images directly to brandguideAI
+
 export const getSystemPrompt = (testLevel: TestLevel): string => {
   const basePrompt = `Te egy SZIGORÚ szakértő brand és logó elemző vagy. A Brandguide 100 pontos értékelési rendszere alapján elemzel logókat és arculatokat.
 

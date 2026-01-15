@@ -1,36 +1,36 @@
 "use client";
 
-import { TypeSquare } from "@untitledui/icons";
-import { TypographyAnalysis as TypographyAnalysisType } from "@/types";
+import { Grid01 } from "@untitledui/icons";
+import { VisualLanguageAnalysis as VisualLanguageAnalysisType } from "@/types";
 
-interface TypographyAnalysisProps {
-    analysis: TypographyAnalysisType;
+interface VisualLanguageAnalysisProps {
+    analysis: VisualLanguageAnalysisType;
 }
 
-export function TypographyAnalysis({ analysis }: TypographyAnalysisProps) {
+export function VisualLanguageAnalysis({ analysis }: VisualLanguageAnalysisProps) {
     return (
         <div className="bg-primary border border-secondary rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center">
-                    <TypeSquare className="w-5 h-5 text-brand-600" />
+                    <Grid01 className="w-5 h-5 text-brand-600" />
                 </div>
-                <h3 className="text-xl font-semibold text-primary">Tipográfia elemzés</h3>
+                <h3 className="text-xl font-semibold text-primary">Vizuális nyelv elemzés</h3>
             </div>
 
             <div className="space-y-4">
                 <div>
-                    <h4 className="font-medium text-primary mb-1">Karakter</h4>
-                    <p className="text-secondary">{analysis.karakter}</p>
+                    <h4 className="font-medium text-primary mb-1">Formák</h4>
+                    <p className="text-secondary">{analysis.formak}</p>
                 </div>
 
                 <div>
-                    <h4 className="font-medium text-primary mb-1">Olvashatóság</h4>
-                    <p className="text-secondary">{analysis.olvashatosag}</p>
+                    <h4 className="font-medium text-primary mb-1">Arculati elemek</h4>
+                    <p className="text-secondary">{analysis.arculatiElemek}</p>
                 </div>
 
                 <div>
-                    <h4 className="font-medium text-primary mb-1">Brandhez illeszkedés</h4>
-                    <p className="text-secondary">{analysis.illeszkedés}</p>
+                    <h4 className="font-medium text-primary mb-1">Stílus egység</h4>
+                    <p className="text-secondary">{analysis.stilusEgyseg}</p>
                 </div>
 
                 {analysis.javaslatok && analysis.javaslatok.length > 0 && (
