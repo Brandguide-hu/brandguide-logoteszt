@@ -54,17 +54,17 @@ export function CriteriaCard({ criteria, score }: CriteriaCardProps) {
                     <p className="text-sm text-tertiary mb-3">{criteria.description}</p>
                     <p className="text-secondary mb-4">{score.indoklas}</p>
 
-                    {score.tippek && score.tippek.length > 0 && (
+                    {score.javaslatok && score.javaslatok.length > 0 && (
                         <div className="bg-brand-50 rounded-lg p-3">
                             <div className="flex items-center gap-2 mb-2">
                                 <Lightbulb05 className="w-4 h-4 text-brand-600" />
                                 <span className="font-medium text-sm text-brand-700">Javaslatok</span>
                             </div>
                             <ul className="space-y-1">
-                                {score.tippek.map((tip, index) => (
+                                {score.javaslatok.map((javaslat, index) => (
                                     <li key={index} className="text-sm text-primary flex items-start gap-2">
                                         <span className="text-brand-500">•</span>
-                                        <span>{tip}</span>
+                                        <span>{javaslat}</span>
                                     </li>
                                 ))}
                             </ul>

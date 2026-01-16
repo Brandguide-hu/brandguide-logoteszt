@@ -28,11 +28,6 @@ export function TypographyAnalysis({ analysis }: TypographyAnalysisProps) {
                     <p className="text-secondary">{analysis.olvashatosag}</p>
                 </div>
 
-                <div>
-                    <h4 className="font-medium text-primary mb-1">Brandhez illeszkedés</h4>
-                    <p className="text-secondary">{analysis.illeszkedés}</p>
-                </div>
-
                 {analysis.javaslatok && analysis.javaslatok.length > 0 && (
                     <div className="bg-brand-50 rounded-lg p-4 mt-4">
                         <h4 className="font-medium text-brand-700 mb-2">Javaslatok</h4>

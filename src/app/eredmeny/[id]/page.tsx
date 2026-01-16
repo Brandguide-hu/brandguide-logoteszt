@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -24,83 +24,6 @@ export default function ResultPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
-    const [isRephrasing, setIsRephrasing] = useState(false);
-    const [rephrased, setRephrased] = useState(false);
-
-    // Rephrase texts with Peti style using Claude API
-    const rephraseTexts = useCallback(async (resultData: AnalysisResult) => {
-        if (rephrased || isRephrasing) return;
-
-        setIsRephrasing(true);
-        try {
-            const response = await fetch('/api/rephrase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    osszegzes: resultData.osszegzes,
-                    erossegek: resultData.erossegek,
-                    fejlesztendo: resultData.fejlesztendo,
-                    szempontok: resultData.szempontok,
-                    szinek: resultData.szinek,
-                    tipografia: resultData.tipografia,
-                    vizualisNyelv: resultData.vizualisNyelv,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Rephrase failed');
-            }
-
-            const data = await response.json();
-            if (data.success && data.rephrased) {
-                // Update result with rephrased texts
-                setResult(prev => {
-                    if (!prev) return prev;
-
-                    const updated = { ...prev };
-
-                    if (data.rephrased.osszegzes) {
-                        updated.osszegzes = data.rephrased.osszegzes;
-                    }
-                    if (data.rephrased.erossegek) {
-                        updated.erossegek = data.rephrased.erossegek;
-                    }
-                    if (data.rephrased.fejlesztendo) {
-                        updated.fejlesztendo = data.rephrased.fejlesztendo;
-                    }
-                    if (data.rephrased.szempontIndoklasok) {
-                        updated.szempontok = { ...prev.szempontok };
-                        Object.entries(data.rephrased.szempontIndoklasok).forEach(([key, indoklas]) => {
-                            if (updated.szempontok[key as CriteriaName]) {
-                                updated.szempontok[key as CriteriaName] = {
-                                    ...updated.szempontok[key as CriteriaName],
-                                    indoklas: indoklas as string,
-                                };
-                            }
-                        });
-                    }
-                    if (data.rephrased.szinek && prev.szinek) {
-                        updated.szinek = { ...prev.szinek, ...data.rephrased.szinek };
-                    }
-                    if (data.rephrased.tipografia && prev.tipografia) {
-                        updated.tipografia = { ...prev.tipografia, ...data.rephrased.tipografia };
-                    }
-                    if (data.rephrased.vizualisNyelv && prev.vizualisNyelv) {
-                        updated.vizualisNyelv = { ...prev.vizualisNyelv, ...data.rephrased.vizualisNyelv };
-                    }
-
-                    return updated;
-                });
-                setRephrased(true);
-            }
-        } catch (err) {
-            console.error('Rephrase error:', err);
-            // Silent fail - original texts remain
-        } finally {
-            setIsRephrasing(false);
-            setLoading(false); // Now show the results
-        }
-    }, [rephrased, isRephrasing]);
 
     useEffect(() => {
         async function fetchResult() {
@@ -119,21 +42,17 @@ export default function ResultPage() {
 
                 const resultData = data.result as unknown as AnalysisResult;
                 setResult(resultData);
-
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
-
-                // Start rephrasing in background
-                rephraseTexts(resultData);
             } catch (err) {
                 console.error("Fetch error:", err);
                 setError("Nem sikerült betölteni az eredményt");
+            } finally {
                 setLoading(false);
             }
-            // Loading stays true until rephrase completes
         }
 
         fetchResult();
-    }, [id, router, rephraseTexts]);
+    }, [id, router]);
 
     const getShareUrl = () => {
         if (typeof window !== "undefined") {

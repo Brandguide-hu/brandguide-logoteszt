@@ -24,8 +24,8 @@ export function VisualLanguageAnalysis({ analysis }: VisualLanguageAnalysisProps
                 </div>
 
                 <div>
-                    <h4 className="font-medium text-primary mb-1">Arculati elemek</h4>
-                    <p className="text-secondary">{analysis.arculatiElemek}</p>
+                    <h4 className="font-medium text-primary mb-1">Elemek</h4>
+                    <p className="text-secondary">{analysis.elemek}</p>
                 </div>
 
                 <div>

@@ -97,6 +97,7 @@ export default function TestPage() {
     const [oldLogo, setOldLogo] = useState<File | null>(null);
     const [newLogo, setNewLogo] = useState<File | null>(null);
     const [colors, setColors] = useState<string[]>([]);
+    const [fontName, setFontName] = useState<string>("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -236,6 +237,7 @@ export default function TestPage() {
                         mediaType,
                         testLevel,
                         colors: testLevel !== "basic" ? colors : undefined,
+                        fontName: testLevel !== "basic" && fontName ? fontName : undefined,
                     }),
                 });
             }
@@ -312,7 +314,7 @@ export default function TestPage() {
             setError(err instanceof Error ? err.message : "Ismeretlen hiba történt");
             setIsSubmitting(false);
         }
-    }, [logo, oldLogo, newLogo, testLevel, colors, router, isRebranding]);
+    }, [logo, oldLogo, newLogo, testLevel, colors, fontName, router, isRebranding]);
 
     // Loading state
     const currentProgress = phaseProgress[streamingPhase] ?? 0;
@@ -725,6 +727,37 @@ export default function TestPage() {
 
                                     <div className="rounded-xl border border-gray-100 bg-white p-6">
                                         <ColorPicker colors={colors} onChange={setColors} />
+                                    </div>
+                                </div>
+
+                                {/* Step 4 - Font name (optional) */}
+                                <div className="mx-auto h-px w-16 bg-gray-100" />
+
+                                <div
+                                    className="opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
+                                    style={{ animationDelay: "0.35s" }}
+                                >
+                                    <div className="mb-4 flex items-center gap-3">
+                                        <span className="flex size-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-400">
+                                            4
+                                        </span>
+                                        <div>
+                                            <h2 className="text-sm font-medium text-gray-900">Betűtípus neve</h2>
+                                            <span className="text-xs text-gray-400">Opcionális</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-xl border border-gray-100 bg-white p-6">
+                                        <input
+                                            type="text"
+                                            value={fontName}
+                                            onChange={(e) => setFontName(e.target.value)}
+                                            placeholder="pl. Montserrat, Poppins, stb."
+                                            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-0"
+                                        />
+                                        <p className="mt-2 text-xs text-gray-400">
+                                            Ha tudod, milyen betűtípust használ a logód, add meg a nevét a pontosabb elemzésért.
+                                        </p>
                                     </div>
                                 </div>
                             </>

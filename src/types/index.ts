@@ -4,13 +4,13 @@ export type TestLevel = 'basic' | 'detailed' | 'full' | 'rebranding';
 // Minősítési kategóriák
 export type Rating = 'Kiemelkedő' | 'Kiforrott' | 'Jó' | 'Elfogadható' | 'Fejlesztendő' | 'Újragondolandó';
 
-// Szempont nevek
+// Szempont nevek - JAVÍTOTT kulcsnevek
 export type CriteriaName =
   | 'megkulonboztethetoseg'
-  | 'egyszuruseg'
+  | 'egyszeruseg'           // JAVÍTVA: egyszuruseg -> egyszeruseg
   | 'alkalmazhatosag'
   | 'emlekezetesseg'
-  | 'idotallosasg'
+  | 'idotallosag'           // JAVÍTVA: idotallosasg -> idotallosag
   | 'univerzalitas'
   | 'lathatosag';
 
@@ -19,7 +19,7 @@ export interface CriteriaScore {
   pont: number;
   maxPont: number;
   indoklas: string;
-  tippek: string[];
+  javaslatok: string[];
 }
 
 // Szín elemzés
@@ -34,14 +34,13 @@ export interface ColorAnalysis {
 export interface TypographyAnalysis {
   karakter: string;
   olvashatosag: string;
-  illeszkedés: string;
   javaslatok: string[];
 }
 
 // Vizuális nyelv elemzés
 export interface VisualLanguageAnalysis {
   formak: string;
-  arculatiElemek: string;
+  elemek: string;
   stilusEgyseg: string;
   javaslatok: string[];
 }
@@ -53,27 +52,27 @@ export interface AnalysisResult {
   minosites: Rating;
   szempontok: {
     megkulonboztethetoseg: CriteriaScore;
-    egyszuruseg: CriteriaScore;
+    egyszeruseg: CriteriaScore;
     alkalmazhatosag: CriteriaScore;
     emlekezetesseg: CriteriaScore;
-    idotallosasg: CriteriaScore;
+    idotallosag: CriteriaScore;
     univerzalitas: CriteriaScore;
     lathatosag: CriteriaScore;
   };
+  osszegzes: string;
   erossegek: string[];
   fejlesztendo: string[];
-  osszegzes: string;
-  szinek?: ColorAnalysis;
-  tipografia?: TypographyAnalysis;
-  vizualisNyelv?: VisualLanguageAnalysis;
+  szinek: ColorAnalysis;
+  tipografia: TypographyAnalysis;
+  vizualisNyelv: VisualLanguageAnalysis;
   createdAt: string;
   testLevel: TestLevel;
   logoUrl?: string;
 }
 
-// Szempontok meta adatai
+// Szempontok meta adatai - JAVÍTOTT kulcsnevek
 export interface CriteriaMeta {
-  name: string;
+  name: CriteriaName;
   displayName: string;
   maxScore: number;
   description: string;
@@ -88,8 +87,8 @@ export const CRITERIA_META: Record<CriteriaName, CriteriaMeta> = {
     description: 'Ha nem tűnsz ki, nem létezel. A zsúfolt piacon ez az elsődleges túlélési kritérium.',
     icon: '🎯'
   },
-  egyszuruseg: {
-    name: 'egyszuruseg',
+  egyszeruseg: {
+    name: 'egyszeruseg',
     displayName: 'Egyszerűség',
     maxScore: 18,
     description: 'Paul Rand alaptétele. A komplexitás az ellenség – amit nem tudsz 2 másodperc alatt felfogni, az nem működik.',
@@ -109,8 +108,8 @@ export const CRITERIA_META: Record<CriteriaName, CriteriaMeta> = {
     description: 'Ha nem marad meg, nem épít brandet. A memória az érték.',
     icon: '💡'
   },
-  idotallosasg: {
-    name: 'idotallosasg',
+  idotallosag: {
+    name: 'idotallosag',
     displayName: 'Időtállóság',
     maxScore: 12,
     description: 'Trendek jönnek-mennek, a jó logó marad. 10+ éves távlatban kell gondolkodni.',
@@ -144,7 +143,7 @@ export interface UploadFormData {
   logo: File | null;
   testLevel: TestLevel;
   colors: string[];
-  typography?: File | null;
+  fontName?: string;  // Betűtípus neve
 }
 
 // Supabase tábla típus
