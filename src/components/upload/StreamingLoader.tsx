@@ -39,7 +39,7 @@ const designPhrases = [
 
 const phases = [
     { id: "start", label: "Elemzés indítása", icon: Stars01 },
-    { id: "analyzing", label: "Brandguide elemzi a logót", icon: Loading02 },
+    { id: "analyzing", label: "brandguide elemzi a logót", icon: Loading02 },
     { id: "processing", label: "Eredmények feldolgozása", icon: Loading02 },
     { id: "saving", label: "Mentés adatbázisba", icon: Database01 },
     { id: "complete", label: "Kész!", icon: CheckCircle },
@@ -156,7 +156,7 @@ export function StreamingLoader({ status, phase }: StreamingLoaderProps) {
                 {phase === "start" && (
                     <div className="bg-brand-50 rounded-lg p-4 text-left">
                         <p className="text-sm text-primary">
-                            <strong>Tudtad?</strong> A Brandguide 100 pontos rendszere Paul Rand, a 20. század egyik
+                            <strong>Tudtad?</strong> A brandguide SCORE rendszer Paul Rand, a 20. század egyik
                             legnevesebb grafikus tervezőjének 7 szempontját alapul véve készült.
                         </p>
                     </div>

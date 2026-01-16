@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-    title: "Brandguide Logóteszt - 100 pontos elemzés",
-    description: "Teszteld a logódat a Brandguide 100 pontos rendszerével! AI-alapú elemzés, szakmai visszajelzés 7 szempont szerint.",
+    title: "LogoLab - brandguide SCORE elemzés",
+    description: "Teszteld a logódat a brandguide SCORE rendszerével! AI-alapú elemzés, szakmai visszajelzés 7 szempont szerint.",
 };
 
 export const viewport: Viewport = {

@@ -217,28 +217,116 @@ export async function queryBrandguideAI(
 // ============================================================================
 
 /**
+ * Try to repair truncated JSON by closing open brackets
+ */
+function tryRepairJSON(jsonStr: string): string {
+  let repaired = jsonStr.trim();
+
+  // Count open brackets
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (const char of repaired) {
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === '{') openBraces++;
+      if (char === '}') openBraces--;
+      if (char === '[') openBrackets++;
+      if (char === ']') openBrackets--;
+    }
+  }
+
+  // If we're in a string, close it
+  if (inString) {
+    repaired += '"';
+  }
+
+  // Remove trailing comma if present
+  repaired = repaired.replace(/,\s*$/, '');
+
+  // Close open brackets
+  while (openBrackets > 0) {
+    repaired += ']';
+    openBrackets--;
+  }
+  while (openBraces > 0) {
+    repaired += '}';
+    openBraces--;
+  }
+
+  return repaired;
+}
+
+/**
  * Parse JSON from brandguideAI response
- * Handles markdown code blocks and other formatting
+ * Handles markdown code blocks, truncated responses, and other formatting
  */
 export function parseJSONResponse<T>(response: string, errorMessage: string): T {
-  try {
-    // Try to extract JSON from markdown code blocks
-    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1].trim()) as T;
+  const tryParse = (jsonStr: string): T | null => {
+    try {
+      return JSON.parse(jsonStr) as T;
+    } catch {
+      return null;
     }
+  };
 
-    // Try to find raw JSON object
-    const rawJsonMatch = response.match(/\{[\s\S]*\}/);
-    if (rawJsonMatch) {
-      return JSON.parse(rawJsonMatch[0]) as T;
+  // Try to extract JSON from markdown code blocks
+  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    const result = tryParse(jsonMatch[1].trim());
+    if (result) return result;
+
+    // Try to repair truncated JSON
+    const repaired = tryRepairJSON(jsonMatch[1].trim());
+    const repairedResult = tryParse(repaired);
+    if (repairedResult) {
+      console.log('[PARSE] Successfully repaired truncated JSON from code block');
+      return repairedResult;
     }
-
-    // Try direct parse
-    return JSON.parse(response) as T;
-  } catch (parseError) {
-    console.error('[PARSE] JSON parse error:', parseError);
-    console.error('[PARSE] Raw response (first 500 chars):', response.slice(0, 500));
-    throw new Error(errorMessage);
   }
+
+  // Try to find raw JSON object
+  const rawJsonMatch = response.match(/\{[\s\S]*\}?/);
+  if (rawJsonMatch) {
+    const result = tryParse(rawJsonMatch[0]);
+    if (result) return result;
+
+    // Try to repair truncated JSON
+    const repaired = tryRepairJSON(rawJsonMatch[0]);
+    const repairedResult = tryParse(repaired);
+    if (repairedResult) {
+      console.log('[PARSE] Successfully repaired truncated JSON');
+      return repairedResult;
+    }
+  }
+
+  // Try direct parse
+  const directResult = tryParse(response);
+  if (directResult) return directResult;
+
+  // Try to repair direct response
+  const repaired = tryRepairJSON(response);
+  const repairedResult = tryParse(repaired);
+  if (repairedResult) {
+    console.log('[PARSE] Successfully repaired truncated response');
+    return repairedResult;
+  }
+
+  console.error('[PARSE] JSON parse error - could not parse or repair');
+  console.error('[PARSE] Raw response (first 500 chars):', response.slice(0, 500));
+  console.error('[PARSE] Raw response (last 200 chars):', response.slice(-200));
+  throw new Error(errorMessage);
 }

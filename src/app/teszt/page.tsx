@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowLeft, Lightbulb05, CheckCircle, AlertCircle, Stars01, BarChart01, RefreshCw05 } from "@untitledui/icons";
 import { FileUpload } from "@/components/application/file-upload/file-upload-base";
 import { ColorPicker } from "@/components/upload";
+import { TransparentVideo } from "@/components/TransparentVideo";
 import { TestLevel } from "@/types";
 import { fileToBase64, getMediaType } from "@/lib/utils";
 
@@ -333,116 +334,126 @@ export default function TestPage() {
                     </div>
                 </div>
 
-                <div className="flex min-h-[calc(100vh-80px)] items-center justify-center px-4">
-                    <div className="w-full max-w-md text-center">
-                        {/* Animated logo preview */}
-                    {isRebranding ? (
-                        <div className="mx-auto mb-8 flex items-center justify-center gap-4">
-                            {oldLogo && (
-                                <div className="flex size-20 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-3">
-                                    <img
-                                        src={URL.createObjectURL(oldLogo)}
-                                        alt="Régi logó"
-                                        className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
-                                    />
-                                </div>
-                            )}
-                            <ArrowRight className="size-5 text-gray-300" />
-                            {newLogo && (
-                                <div className="flex size-20 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-3">
-                                    <img
-                                        src={URL.createObjectURL(newLogo)}
-                                        alt="Új logó"
-                                        className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        logo && (
-                            <div className="mx-auto mb-8 flex size-24 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                                <img
-                                    src={URL.createObjectURL(logo)}
-                                    alt="Logo"
-                                    className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
-                                />
-                            </div>
-                        )
-                    )}
-
-                    {/* brandguideAI indicator */}
-                    <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1">
-                        <Stars01 className="size-3.5 text-gray-700" />
-                        <span className="text-xs font-medium text-gray-700">
-                            {isRebranding ? "Rebranding elemzés" : "brandguideAI elemzés"}
-                        </span>
-                    </div>
-
-                    {/* Status text with cycling message */}
-                    <div className="mb-6">
-                        {streamingPhase !== "complete" && (
-                            <p className="h-6 text-lg font-medium text-gray-900">
-                                {displayedMessage}
-                                {displayedMessage && <span className="inline-block w-0.5 h-5 ml-0.5 bg-gray-400 animate-pulse align-middle" />}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="mb-8">
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                            <div
-                                className="h-full bg-[#fff012] transition-all duration-500 ease-out"
-                                style={{ width: `${currentProgress}%` }}
+                <div className="flex min-h-[calc(100vh-80px)] items-center justify-center px-4 py-12">
+                    {/* Dark card container */}
+                    <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl">
+                        {/* SCORE Animation at top */}
+                        <div className="mb-6 flex justify-center">
+                            <TransparentVideo
+                                src="/score-animation.webm"
+                                maxSize={200}
+                                threshold={40}
                             />
                         </div>
-                        <div className="mt-2 flex justify-between text-xs text-gray-400">
-                            <span>{currentProgress}%</span>
-                            <span>{currentLabel}</span>
-                        </div>
-                    </div>
 
-                    {/* Phase steps */}
-                    <div className="flex justify-center gap-2">
-                        {activePhaseSteps.map((phase, index) => {
-                            const isActive = streamingPhase === phase;
-                            const stepProgress = phaseProgress[phase] ?? 0;
-                            const isComplete = currentProgress > stepProgress;
-                            const stepLabel = phaseLabels[phase] ?? phase;
-
-                            const getStepColors = () => {
-                                if (isComplete) return "bg-[#fff012] text-gray-900";
-                                if (isActive) return "bg-gray-900 text-white";
-                                return "bg-gray-100 text-gray-400";
-                            };
-
-                            return (
-                                <div key={phase} className="flex flex-col items-center gap-1">
-                                    <div
-                                        className={`flex size-8 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${getStepColors()}`}
-                                    >
-                                        {isComplete ? <CheckCircle className="size-4" /> : index + 1}
+                        {/* Logo preview - smaller, below animation */}
+                        {isRebranding ? (
+                            <div className="mx-auto mb-6 flex items-center justify-center gap-4">
+                                {oldLogo && (
+                                    <div className="flex size-16 items-center justify-center rounded-xl border border-gray-700 bg-gray-800 p-2">
+                                        <img
+                                            src={URL.createObjectURL(oldLogo)}
+                                            alt="Régi logó"
+                                            className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
+                                        />
                                     </div>
-                                    <span className={`max-w-[60px] text-center text-[10px] leading-tight ${isActive ? "font-medium text-gray-700" : "text-gray-400"}`}>
-                                        {stepLabel}
-                                    </span>
+                                )}
+                                <ArrowRight className="size-4 text-gray-500" />
+                                {newLogo && (
+                                    <div className="flex size-16 items-center justify-center rounded-xl border border-gray-700 bg-gray-800 p-2">
+                                        <img
+                                            src={URL.createObjectURL(newLogo)}
+                                            alt="Új logó"
+                                            className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            logo && (
+                                <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl border border-gray-700 bg-gray-800 p-3">
+                                    <img
+                                        src={URL.createObjectURL(logo)}
+                                        alt="Logo"
+                                        className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
+                                    />
                                 </div>
-                            );
-                        })}
-                    </div>
+                            )
+                        )}
 
-                    {/* Streaming preview */}
-                    {streamingText && (
-                        <div className="mt-8 rounded-xl border border-gray-100 bg-gray-50/50 p-4 text-left">
-                            <p className="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">
-                                Előnézet
-                            </p>
-                            <p className="max-h-32 overflow-y-auto text-sm leading-relaxed text-gray-600">
-                                {streamingText.slice(0, 300)}
-                                {streamingText.length > 300 && "..."}
-                            </p>
+                        {/* brandguideAI indicator */}
+                        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-gray-800 px-3 py-1">
+                            <Stars01 className="size-3.5 text-[#fff012]" />
+                            <span className="text-xs font-medium text-gray-300">
+                                {isRebranding ? "Rebranding elemzés" : "brandguideAI elemzés"}
+                            </span>
                         </div>
-                    )}
+
+                        {/* Status text with cycling message */}
+                        <div className="mb-6">
+                            {streamingPhase !== "complete" && (
+                                <p className="h-6 text-lg font-medium text-white">
+                                    {displayedMessage}
+                                    {displayedMessage && <span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" />}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="mb-8">
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                                <div
+                                    className="h-full bg-[#fff012] transition-all duration-500 ease-out"
+                                    style={{ width: `${currentProgress}%` }}
+                                />
+                            </div>
+                            <div className="mt-2 flex justify-between text-xs text-gray-500">
+                                <span>{currentProgress}%</span>
+                                <span>{currentLabel}</span>
+                            </div>
+                        </div>
+
+                        {/* Phase steps */}
+                        <div className="flex justify-center gap-2">
+                            {activePhaseSteps.map((phase, index) => {
+                                const isActive = streamingPhase === phase;
+                                const stepProgress = phaseProgress[phase] ?? 0;
+                                const isComplete = currentProgress > stepProgress;
+                                const stepLabel = phaseLabels[phase] ?? phase;
+
+                                const getStepColors = () => {
+                                    if (isComplete) return "bg-[#fff012] text-gray-900";
+                                    if (isActive) return "bg-white text-gray-900";
+                                    return "bg-gray-800 text-gray-500";
+                                };
+
+                                return (
+                                    <div key={phase} className="flex flex-col items-center gap-1">
+                                        <div
+                                            className={`flex size-8 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${getStepColors()}`}
+                                        >
+                                            {isComplete ? <CheckCircle className="size-4" /> : index + 1}
+                                        </div>
+                                        <span className={`max-w-[60px] text-center text-[10px] leading-tight ${isActive ? "font-medium text-gray-300" : "text-gray-500"}`}>
+                                            {stepLabel}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Streaming preview */}
+                        {streamingText && (
+                            <div className="mt-8 rounded-xl border border-gray-700 bg-gray-800/50 p-4 text-left">
+                                <p className="mb-2 text-xs font-medium uppercase tracking-widest text-gray-500">
+                                    Előnézet
+                                </p>
+                                <p className="max-h-32 overflow-y-auto text-sm leading-relaxed text-gray-400">
+                                    {streamingText.slice(0, 300)}
+                                    {streamingText.length > 300 && "..."}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

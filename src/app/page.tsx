@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01, RefreshCw05 } from "@untitledui/icons";
+import { TransparentVideo } from "@/components/TransparentVideo";
 
 const steps = [
     {
@@ -111,10 +112,10 @@ export default function Home() {
             <div className="mx-auto h-px w-24 bg-gray-200" />
 
             {/* How it works */}
-            <section id="hogyan-mukodik" className="px-4 py-24 sm:px-6 md:py-32 lg:px-8">
+            <section id="hogyan-mukodik" className="bg-gray-100 px-4 py-24 sm:px-6 md:py-32 lg:px-8">
                 <div className="mx-auto max-w-5xl">
                     <div className="mb-16 text-center">
-                        <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
+                        <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-500">
                             Folyamat
                         </span>
                         <h2 className="text-3xl font-light text-gray-900 md:text-4xl">
@@ -135,7 +136,7 @@ export default function Home() {
                                 </div>
 
                                 {/* Icon */}
-                                <div className="mb-4 inline-flex rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-all duration-300 group-hover:border-[#fff012]/30 group-hover:bg-[#fff012]/10">
+                                <div className="mb-4 inline-flex rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-300 group-hover:border-[#fff012]/30 group-hover:bg-[#fff012]/10">
                                     <step.icon className="size-6 text-gray-400 transition-colors duration-300 group-hover:text-gray-900" />
                                 </div>
 
@@ -147,41 +148,49 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Brandguide 100 Section */}
-            <section className="bg-gray-100 px-4 py-24 sm:px-6 md:py-32 lg:px-8">
+            {/* brandguide SCORE Section */}
+            <section className="bg-gray-900 px-4 py-32 sm:px-6 md:py-40 lg:px-8">
                 <div className="mx-auto max-w-5xl">
-                    <div className="grid items-start gap-16 lg:grid-cols-2">
+                    <div className="grid items-end gap-16 lg:grid-cols-2">
                         {/* Left content */}
                         <div>
+                            {/* SCORE Animation - Centered in left column */}
+                            <div className="flex justify-center mb-8">
+                                <TransparentVideo
+                                    src="/score-animation.webm"
+                                    maxSize={450}
+                                    threshold={40}
+                                />
+                            </div>
                             <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
                                 Módszertan
                             </span>
-                            <h2 className="mb-6 text-3xl font-light text-gray-900 md:text-4xl">
-                                Brandguide 100
+                            <h2 className="mb-6 text-3xl font-light text-white md:text-4xl">
+                                brandguide <span className="font-bold text-[#fff012]">SCORE</span>
                             </h2>
-                            <p className="mb-8 text-gray-500 leading-relaxed">
+                            <p className="mb-8 text-gray-400 leading-relaxed">
                                 Paul Rand, a 20. század egyik legnagyobb grafikus tervezője 7 szempontot határozott meg egy
                                 jó logó értékeléséhez. Mi ezt a rendszert dolgoztuk át 100 pontos, súlyozott skálává.
                             </p>
 
                             {/* Quote */}
                             <blockquote className="relative border-l-2 border-[#fff012] pl-6">
-                                <p className="text-gray-600 italic leading-relaxed">
+                                <p className="text-gray-300 italic leading-relaxed">
                                     „A logónak önmagában nincs jelentése – a jelentést az idő és a következetes használat adja neki."
                                 </p>
-                                <footer className="mt-3 text-sm font-medium text-gray-900">
+                                <footer className="mt-3 text-sm font-medium text-white">
                                     Paul Rand
                                 </footer>
                             </blockquote>
 
                             {/* Rating scale */}
                             <div className="mt-10 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {ratings.map((rating, index) => (
+                                {ratings.map((rating) => (
                                     <div
                                         key={rating.label}
-                                        className="rounded-lg border border-gray-100 bg-white px-3 py-2 transition-all duration-300 hover:border-gray-200 hover:shadow-sm"
+                                        className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 transition-all duration-300 hover:border-gray-600 hover:bg-gray-700"
                                     >
-                                        <span className="text-sm font-medium text-gray-900">{rating.score}</span>
+                                        <span className="text-sm font-medium text-white">{rating.score}</span>
                                         <span className="ml-2 text-xs text-gray-400">{rating.label}</span>
                                     </div>
                                 ))}
@@ -193,25 +202,25 @@ export default function Home() {
                             {criteria.map((criterion, index) => (
                                 <div
                                     key={criterion.name}
-                                    className="group flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 transition-all duration-300 hover:border-gray-200 hover:shadow-sm opacity-0 animate-[fadeSlideUp_0.5s_ease_forwards]"
+                                    className="group flex items-center gap-4 rounded-xl border border-gray-700 bg-gray-800 p-4 transition-all duration-300 hover:border-gray-600 hover:bg-gray-700 opacity-0 animate-[fadeSlideUp_0.5s_ease_forwards]"
                                     style={{ animationDelay: `${0.3 + index * 0.08}s` }}
                                 >
-                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 transition-colors duration-300 group-hover:bg-[#fff012]/20">
-                                        <criterion.icon className="size-5 text-gray-400 transition-colors duration-300 group-hover:text-gray-700" />
+                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-700 transition-colors duration-300 group-hover:bg-[#fff012]/20">
+                                        <criterion.icon className="size-5 text-gray-400 transition-colors duration-300 group-hover:text-white" />
                                     </div>
                                     <div className="flex-1">
-                                        <span className="text-sm font-medium text-gray-900">{criterion.name}</span>
+                                        <span className="text-sm font-medium text-white">{criterion.name}</span>
                                     </div>
-                                    <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 transition-all duration-300 group-hover:bg-[#fff012] group-hover:text-gray-900">
+                                    <div className="rounded-full bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300 transition-all duration-300 group-hover:bg-[#fff012] group-hover:text-gray-900">
                                         {criterion.points}
                                     </div>
                                 </div>
                             ))}
 
                             {/* Total */}
-                            <div className="mt-4 flex items-center justify-between rounded-xl border-2 border-dashed border-gray-200 bg-white/50 p-4">
-                                <span className="text-sm font-medium text-gray-500">Összesen</span>
-                                <span className="text-2xl font-light text-gray-900">100</span>
+                            <div className="mt-4 flex items-center justify-between rounded-xl border-2 border-dashed border-gray-600 bg-gray-800/50 p-4">
+                                <span className="text-sm font-medium text-gray-400">Összesen</span>
+                                <span className="text-2xl font-light text-white">100</span>
                             </div>
                         </div>
                     </div>
@@ -342,7 +351,7 @@ export default function Home() {
             <footer className="border-t border-gray-100 px-4 py-8 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-5xl text-center">
                     <p className="text-xs text-gray-400">
-                        © 2025 Brandguide. Minden jog fenntartva.
+                        © 2025 brandguide. Minden jog fenntartva.
                     </p>
                 </div>
             </footer>

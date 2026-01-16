@@ -183,8 +183,8 @@ export default function RebrandingResultPage() {
         if (!result) return "";
         const scoreDiff = result.newLogoAnalysis.osszpontszam - result.oldLogoAnalysis.osszpontszam;
         return scoreDiff > 0
-            ? `A rebrandelés sikeres! Az új logóm ${scoreDiff} ponttal jobb lett a Brandguide Logóteszten!`
-            : `Összehasonlítottam a régi és új logómat a Brandguide Logóteszten!`;
+            ? `A rebrandelés sikeres! Az új logóm ${scoreDiff} ponttal jobb lett a LogoLab-on!`
+            : `Összehasonlítottam a régi és új logómat a LogoLab-on!`;
     };
 
     const handleCopyUrl = async () => {
@@ -628,15 +628,15 @@ export default function RebrandingResultPage() {
                         style={{ animationDelay: "0.9s" }}
                     >
                         <span className="mb-4 inline-block rounded-full bg-[#fff012] px-3 py-1 text-xs font-medium text-gray-900">
-                            Brandguide/AI
+                            brandguide/AI
                         </span>
                         <h2 className="mb-3 text-2xl font-light text-white md:text-3xl">Szeretnéd továbbfejleszteni a brandedet?</h2>
                         <p className="mx-auto mb-8 max-w-xl text-gray-400">
-                            A Brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
+                            A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
                         </p>
                         <a href="https://brandguide.hu" target="_blank" rel="noopener noreferrer">
                             <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-medium text-gray-900 transition-all hover:shadow-lg hover:shadow-[#fff012]/20">
-                                Ismerkedj meg a Brandguide/AI-jal
+                                Ismerkedj meg a brandguide/AI-jal
                                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
                             </button>
                         </a>
