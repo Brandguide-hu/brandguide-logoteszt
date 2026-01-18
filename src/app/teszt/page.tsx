@@ -7,6 +7,7 @@ import { ArrowRight, ArrowLeft, Lightbulb05, CheckCircle, AlertCircle, Stars01, 
 import { FileUpload } from "@/components/application/file-upload/file-upload-base";
 import { ColorPicker } from "@/components/upload";
 import { TransparentVideo } from "@/components/TransparentVideo";
+import { ResultSkeleton } from "@/components/results";
 import { TestLevel } from "@/types";
 import { fileToBase64, getMediaType } from "@/lib/utils";
 
@@ -324,19 +325,16 @@ export default function TestPage() {
 
     if (isSubmitting) {
         return (
-            <div className="min-h-screen bg-white">
-                {/* Header */}
-                <div className="border-b border-gray-100 px-4 py-4 sm:px-6 lg:px-8">
-                    <div className="mx-auto flex max-w-3xl justify-center">
-                        <Link href="/">
-                            <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
-                        </Link>
-                    </div>
+            <div className="relative min-h-screen">
+                {/* Background: Result page skeleton */}
+                <div className="pointer-events-none opacity-30">
+                    <ResultSkeleton />
                 </div>
 
-                <div className="flex min-h-[calc(100vh-80px)] items-center justify-center px-4 py-12">
+                {/* Overlay with dark card */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     {/* Dark card container */}
-                    <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl">
+                    <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl mx-4">
                         {/* SCORE Animation at top */}
                         <div className="mb-6 flex justify-center">
                             <TransparentVideo
@@ -413,8 +411,8 @@ export default function TestPage() {
                             </div>
                         </div>
 
-                        {/* Phase steps */}
-                        <div className="flex justify-center gap-2">
+                        {/* Phase steps - equal spacing with flex-1 */}
+                        <div className="flex justify-between">
                             {activePhaseSteps.map((phase, index) => {
                                 const isActive = streamingPhase === phase;
                                 const stepProgress = phaseProgress[phase] ?? 0;
@@ -428,13 +426,13 @@ export default function TestPage() {
                                 };
 
                                 return (
-                                    <div key={phase} className="flex flex-col items-center gap-1">
+                                    <div key={phase} className="flex flex-1 flex-col items-center gap-1">
                                         <div
                                             className={`flex size-8 items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${getStepColors()}`}
                                         >
                                             {isComplete ? <CheckCircle className="size-4" /> : index + 1}
                                         </div>
-                                        <span className={`max-w-[60px] text-center text-[10px] leading-tight ${isActive ? "font-medium text-gray-300" : "text-gray-500"}`}>
+                                        <span className={`text-center text-[10px] leading-tight ${isActive ? "font-medium text-gray-300" : "text-gray-500"}`}>
                                             {stepLabel}
                                         </span>
                                     </div>
