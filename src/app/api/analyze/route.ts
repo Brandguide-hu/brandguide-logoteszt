@@ -224,17 +224,25 @@ function validateScoringData(data: Record<string, unknown>): ScoringResponse {
     effectiveData = data[wrapperKey] as Record<string, unknown>;
   }
 
-  // brandguideAI uses varying keys: 'szempontok', 'ertekeles'/'értékelés', 'kriteriumok'/'kritériumok'
-  // Find the actual key by checking accent-stripped versions
-  const szempontokPatterns = ['szempontok', 'ertekeles', 'kriteriumok'];
+  // brandguideAI uses varying keys for criteria container:
+  // 'szempontok', 'ertekeles'/'értékelés', 'kriteriumok'/'kritériumok', 'reszletes_ertekeles'/'részletes_értékelés'
+  // Find the actual key by checking accent-stripped versions (with underscore handling)
+  const szempontokPatterns = ['szempontok', 'ertekeles', 'kriteriumok', 'reszletes_ertekeles'];
   let rawSzempontok: Record<string, unknown> = {};
   let szempontokSource = 'empty';
+
+  // Debug: log all keys in effectiveData
+  console.log('[VALIDATE] effectiveData keys:', Object.keys(effectiveData).join(', '));
+
   for (const key of Object.keys(effectiveData)) {
+    // Strip accents but keep underscores
     const stripped = stripAccents(key);
+    console.log(`[VALIDATE] Checking key "${key}" -> stripped "${stripped}"`);
     if (szempontokPatterns.includes(stripped)) {
       if (typeof effectiveData[key] === 'object' && effectiveData[key] !== null) {
         rawSzempontok = effectiveData[key] as Record<string, unknown>;
         szempontokSource = key;
+        console.log(`[VALIDATE] MATCH! Found szempontok in key "${key}"`);
         break;
       }
     }
