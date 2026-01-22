@@ -100,32 +100,29 @@ function calculateTotalScore(szempontok: ScoringResponse['szempontok']): number 
 
 /**
  * Normalize criteria key names to handle common variations
+ * Uses accent-stripping for consistent matching
  */
 function normalizeCriteriaKey(key: string): string {
-  const normalized = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // First normalize: lowercase and strip accents
+  const stripped = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Map common variations to canonical names
+  // Map accent-stripped variations to canonical names
   const keyMappings: Record<string, string> = {
+    // All mappings use accent-stripped keys
     'megkulonboztethetoseg': 'megkulonboztethetoseg',
-    'megkülönböztethetőség': 'megkulonboztethetoseg',
-    'megkulonboztetheseg': 'megkulonboztethetoseg',
+    'megkulonboztetheseg': 'megkulonboztethetoseg', // typo
     'egyszeruseg': 'egyszeruseg',
-    'egyszerűség': 'egyszeruseg',
+    'egyszuruseg': 'egyszeruseg', // typo
     'alkalmazhatosag': 'alkalmazhatosag',
-    'alkalmazhatóság': 'alkalmazhatosag',
     'emlekezetesseg': 'emlekezetesseg',
-    'emlékezetesség': 'emlekezetesseg',
     'idotallosag': 'idotallosag',
-    'időtállóság': 'idotallosag',
-    'idotallossag': 'idotallosag', // dupla s
+    'idotallossag': 'idotallosag', // dupla s typo
     'univerzalitas': 'univerzalitas',
-    'univerzálitás': 'univerzalitas',
     'lathatosag': 'lathatosag',
-    'láthatóság': 'lathatosag',
     'lathatasag': 'lathatosag', // typo
   };
 
-  return keyMappings[normalized] || keyMappings[key] || key;
+  return keyMappings[stripped] || stripped;
 }
 
 /**
@@ -163,30 +160,67 @@ function clampCriteria(criteria: Record<string, unknown> | undefined, maxPont: n
 }
 
 /**
+ * Strip accents from a string for comparison
+ */
+function stripAccents(str: string): string {
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Find a wrapper key in data by checking accent-stripped versions
+ * Returns the actual key if found, or null
+ */
+function findWrapperKey(data: Record<string, unknown>): string | null {
+  // Known wrapper patterns (accent-stripped)
+  const wrapperPatterns = [
+    'brandguide_ertekeles',
+    'logo_ertekeles',
+    'ertekeles',
+  ];
+
+  for (const key of Object.keys(data)) {
+    const stripped = stripAccents(key.replace(/[_\s-]/g, '_'));
+    for (const pattern of wrapperPatterns) {
+      if (stripped.includes(pattern) && typeof data[key] === 'object' && data[key] !== null) {
+        return key;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Validate scoring data (full response including new fields)
  * Handles multiple key variations from brandguideAI:
- * - szempontok vs ertekeles
+ * - szempontok vs ertekeles (with/without accents)
  * - osszpontszam vs osszPontszam vs pipiOsszpipiPontpipiSzam
  * - nested structure like brandguide_ertekeles.szempontok or logó_értékelés.szempontok
  */
 function validateScoringData(data: Record<string, unknown>): ScoringResponse {
   // Handle nested wrapper structures - brandguideAI sometimes wraps everything
-  // Known wrappers: brandguide_ertekeles, logó_értékelés (Hungarian with accent)
+  // Use dynamic wrapper detection to handle any accent variation
   let effectiveData = data;
-  if (data.brandguide_ertekeles && typeof data.brandguide_ertekeles === 'object') {
-    console.log('[VALIDATE] Found nested brandguide_ertekeles structure, unwrapping...');
-    effectiveData = data.brandguide_ertekeles as Record<string, unknown>;
-  } else if (data['logó_értékelés'] && typeof data['logó_értékelés'] === 'object') {
-    console.log('[VALIDATE] Found nested logó_értékelés structure, unwrapping...');
-    effectiveData = data['logó_értékelés'] as Record<string, unknown>;
-  } else if (data['logo_ertekeles'] && typeof data['logo_ertekeles'] === 'object') {
-    console.log('[VALIDATE] Found nested logo_ertekeles structure, unwrapping...');
-    effectiveData = data['logo_ertekeles'] as Record<string, unknown>;
+  const wrapperKey = findWrapperKey(data);
+  if (wrapperKey) {
+    console.log(`[VALIDATE] Found nested wrapper structure: "${wrapperKey}", unwrapping...`);
+    effectiveData = data[wrapperKey] as Record<string, unknown>;
   }
 
-  // brandguideAI sometimes uses 'szempontok', sometimes 'ertekeles' - accept both
-  const rawSzempontok = (effectiveData.szempontok || effectiveData.ertekeles || {}) as Record<string, unknown>;
-  console.log('[VALIDATE] Using szempontok source:', effectiveData.szempontok ? 'szempontok' : effectiveData.ertekeles ? 'ertekeles' : 'empty');
+  // brandguideAI sometimes uses 'szempontok', sometimes 'ertekeles'/'értékelés' - accept all variations
+  // Find the actual key by checking accent-stripped versions
+  let rawSzempontok: Record<string, unknown> = {};
+  let szempontokSource = 'empty';
+  for (const key of Object.keys(effectiveData)) {
+    const stripped = stripAccents(key);
+    if (stripped === 'szempontok' || stripped === 'ertekeles') {
+      if (typeof effectiveData[key] === 'object' && effectiveData[key] !== null) {
+        rawSzempontok = effectiveData[key] as Record<string, unknown>;
+        szempontokSource = key;
+        break;
+      }
+    }
+  }
+  console.log('[VALIDATE] Using szempontok source:', szempontokSource);
 
   // Also handle different osszpontszam key variations
   const osszpontszam = (effectiveData.pipiOsszpipiPontpipiSzam || effectiveData.osszpontszam || effectiveData.osszPontszam) as number | undefined;
