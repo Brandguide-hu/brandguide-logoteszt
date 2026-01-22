@@ -366,31 +366,40 @@ DE ha a badge-en belül:
 
 ---
 
-## OUTPUT – CSAK VALID JSON!
+## OUTPUT – SZIGORÚAN KÖVETENDŐ JSON FORMÁTUM!
 
-**KRITIKUS:** KÖTELEZŐEN add meg MIND A 7 szempontot! A válasz max 3500 karakter legyen.
+**ABSZOLÚT KÖTELEZŐ:** A válaszod KIZÁRÓLAG az alábbi JSON struktúra legyen, SEMMILYEN módosítás, wrapper, vagy extra mező nélkül!
 
-Ellenőrizd mielőtt válaszolsz:
-1. Mind a 7 szempont szerepel? (megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag)
-2. Kritikus voltál? A felső sávok (RITKA!) csak kivételes esetben járnak!
-3. Minden szempontnál van indoklás ÉS 2-3 javaslat!
+**TILOS:**
+- Wrapper objektum hozzáadása (pl. "logó_értékelés", "brandguide_ertekeles", stb.)
+- A kulcsnevek megváltoztatása (NEM "kritériumok", NEM "részletes_értékelés", NEM "pontszám")
+- Ékezetes kulcsnevek használata (NEM "indoklás", HANEM "indoklas")
+- Extra mezők hozzáadása (NEM "márka_azonosítása", NEM "kategória", stb.)
 
-FONTOS: Minden szempontnál adj 2-3 konkrét, actionable javaslatot! A javaslatok legyenek specifikusak és megvalósíthatók.
+**KÖTELEZŐ:** Pontosan ezt a struktúrát kövesd, KARAKTERRE PONTOSAN ezekkel a kulcsnevekkel:
 
+\`\`\`json
 {
-  "pipiOsszpipiPontpipiSzam": <0-100>,
-  "pipiLogopipitipus": "<klasszikus_logo | kampany_badge | illusztracio_jellegu>",
+  "osszpontszam": <szám 0-100>,
+  "logotipus": "<klasszikus_logo | kampany_badge | illusztracio_jellegu>",
   "szempontok": {
-    "megkulonboztethetoseg": {"pont": <0-20>, "maxPont": 20, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "egyszeruseg": {"pont": <0-18>, "maxPont": 18, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "alkalmazhatosag": {"pont": <0-15>, "maxPont": 15, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "emlekezetesseg": {"pont": <0-15>, "maxPont": 15, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "idotallosag": {"pont": <0-12>, "maxPont": 12, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "univerzalitas": {"pont": <0-10>, "maxPont": 10, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]},
-    "lathatosag": {"pont": <0-10>, "maxPont": 10, "indoklas": "<2-3 mondat, max 250 kar>", "javaslatok": ["<konkrét javaslat>", "<konkrét javaslat>", "<konkrét javaslat>"]}
+    "megkulonboztethetoseg": {"pont": <0-20>, "maxPont": 20, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "egyszeruseg": {"pont": <0-18>, "maxPont": 18, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "alkalmazhatosag": {"pont": <0-15>, "maxPont": 15, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "emlekezetesseg": {"pont": <0-15>, "maxPont": 15, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "idotallosag": {"pont": <0-12>, "maxPont": 12, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "univerzalitas": {"pont": <0-10>, "maxPont": 10, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]},
+    "lathatosag": {"pont": <0-10>, "maxPont": 10, "indoklas": "<szöveg>", "javaslatok": ["<1>", "<2>", "<3>"]}
   },
-  "hiresLogo": {"pipiIsmert": <true/false>, "pipiMarka": "<vagy null>"}
-}`;
+  "hiresLogo": {"pipiIsmert": <true|false>, "pipiMarka": "<string vagy null>"}
+}
+\`\`\`
+
+**ELLENŐRZÉS VÁLASZ ELŐTT:**
+1. A válasz KÖZVETLENÜL a JSON-nal kezdődik, nincs wrapper objektum?
+2. A kulcsok PONTOSAN: "szempontok" (NEM "kritériumok"), "pont" (NEM "pontszám"), "indoklas" (NEM "indoklás")?
+3. NINCS ékezet a kulcsnevekben?
+4. Mind a 7 szempont megvan a PONTOS kulcsnevekkel?`;
 
 // ============================================================================
 // PETI STÍLUS BLOKK - Summary és Details promptokhoz
