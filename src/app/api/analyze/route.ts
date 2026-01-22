@@ -115,11 +115,13 @@ function normalizeCriteriaKey(key: string): string {
     'egyszuruseg': 'egyszeruseg', // typo
     'alkalmazhatosag': 'alkalmazhatosag',
     'emlekezetesseg': 'emlekezetesseg',
+    'emlekezetseg': 'emlekezetesseg', // typo - hiányzó 'e'
+    'emleketesseg': 'emlekezetesseg', // typo variant
     'idotallosag': 'idotallosag',
     'idotallossag': 'idotallosag', // dupla s typo
     'univerzalitas': 'univerzalitas',
     'lathatosag': 'lathatosag',
-    'lathatasag': 'lathatosag', // typo
+    'lathatasag': 'lathatosag', // typo - extra 'a'
   };
 
   return keyMappings[stripped] || stripped;
