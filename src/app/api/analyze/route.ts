@@ -167,15 +167,21 @@ function clampCriteria(criteria: Record<string, unknown> | undefined, maxPont: n
  * Handles multiple key variations from brandguideAI:
  * - szempontok vs ertekeles
  * - osszpontszam vs osszPontszam vs pipiOsszpipiPontpipiSzam
- * - nested structure like brandguide_ertekeles.szempontok
+ * - nested structure like brandguide_ertekeles.szempontok or logó_értékelés.szempontok
  */
 function validateScoringData(data: Record<string, unknown>): ScoringResponse {
-  // Handle nested brandguide_ertekeles structure
-  // brandguideAI sometimes wraps everything in brandguide_ertekeles
+  // Handle nested wrapper structures - brandguideAI sometimes wraps everything
+  // Known wrappers: brandguide_ertekeles, logó_értékelés (Hungarian with accent)
   let effectiveData = data;
   if (data.brandguide_ertekeles && typeof data.brandguide_ertekeles === 'object') {
     console.log('[VALIDATE] Found nested brandguide_ertekeles structure, unwrapping...');
     effectiveData = data.brandguide_ertekeles as Record<string, unknown>;
+  } else if (data['logó_értékelés'] && typeof data['logó_értékelés'] === 'object') {
+    console.log('[VALIDATE] Found nested logó_értékelés structure, unwrapping...');
+    effectiveData = data['logó_értékelés'] as Record<string, unknown>;
+  } else if (data['logo_ertekeles'] && typeof data['logo_ertekeles'] === 'object') {
+    console.log('[VALIDATE] Found nested logo_ertekeles structure, unwrapping...');
+    effectiveData = data['logo_ertekeles'] as Record<string, unknown>;
   }
 
   // brandguideAI sometimes uses 'szempontok', sometimes 'ertekeles' - accept both
