@@ -223,11 +223,13 @@ function validateScoringData(data: Record<string, unknown>): ScoringResponse {
 
   // Log if any scores were clamped
   const clampedScores: string[] = [];
-  if (normalizedSzempontok.lathatosag?.pont && normalizedSzempontok.lathatosag.pont > 10) {
-    clampedScores.push(`lathatosag: ${normalizedSzempontok.lathatosag.pont} -> 10`);
+  const lathatosagPont = normalizedSzempontok.lathatosag?.pont as number | undefined;
+  const idotallosagPont = normalizedSzempontok.idotallosag?.pont as number | undefined;
+  if (lathatosagPont && lathatosagPont > 10) {
+    clampedScores.push(`lathatosag: ${lathatosagPont} -> 10`);
   }
-  if (normalizedSzempontok.idotallosag?.pont && normalizedSzempontok.idotallosag.pont > 12) {
-    clampedScores.push(`idotallosag: ${normalizedSzempontok.idotallosag.pont} -> 12`);
+  if (idotallosagPont && idotallosagPont > 12) {
+    clampedScores.push(`idotallosag: ${idotallosagPont} -> 12`);
   }
   if (clampedScores.length > 0) {
     console.log('[VALIDATE] Clamped scores:', clampedScores.join(', '));
