@@ -101,7 +101,8 @@ export function ResultSkeleton() {
                             <div className="h-5 w-20 animate-pulse rounded-full bg-gray-100" />
                         </div>
                         <div className="space-y-3">
-                            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                            {/* Fixed widths to avoid hydration mismatch - no Math.random() */}
+                            {[55, 72, 60, 68, 50, 65, 58].map((width, i) => (
                                 <div
                                     key={i}
                                     className="rounded-xl border border-gray-100 bg-white p-5"
@@ -116,7 +117,7 @@ export function ResultSkeleton() {
                                     <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
                                         <div
                                             className="h-full animate-pulse rounded-full bg-gray-200"
-                                            style={{ width: `${Math.random() * 40 + 40}%` }}
+                                            style={{ width: `${width}%` }}
                                         />
                                     </div>
                                     <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100" />

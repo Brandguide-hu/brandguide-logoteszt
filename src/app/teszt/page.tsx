@@ -55,41 +55,46 @@ const LOADING_MESSAGES = {
     ],
 };
 
-// Direct brandguideAI pipeline phases
-type Phase = "start" | "vision" | "vision_old" | "vision_new" | "brandguide_analysis" | "brandguide_old" | "brandguide_new" | "comparing" | "processing" | "visual" | "saving" | "complete";
+// Direct brandguideAI pipeline phases - must match API route phases
+type Phase = "start" | "vision" | "scoring" | "summary" | "details" | "processing" | "saving" | "complete" |
+    "vision_old" | "vision_new" | "brandguide_old" | "brandguide_new" | "comparing";
 
 const phaseProgress: Record<Phase, number> = {
     start: 5,
     vision: 15,
-    vision_old: 10,
-    vision_new: 35,
-    brandguide_analysis: 30,
-    brandguide_old: 25,
-    brandguide_new: 55,
-    comparing: 50,
-    processing: 70,
-    visual: 85,
+    scoring: 35,
+    summary: 55,
+    details: 70,
+    processing: 85,
     saving: 95,
     complete: 100,
+    // Rebranding phases
+    vision_old: 10,
+    vision_new: 35,
+    brandguide_old: 25,
+    brandguide_new: 55,
+    comparing: 80,
 };
 
 const phaseLabels: Record<Phase, string> = {
     start: "Indítás",
     vision: "Kép feldolgozás",
-    vision_old: "Régi kép",
-    vision_new: "Új kép",
-    brandguide_analysis: "Pontozás",
-    brandguide_old: "Régi logó",
-    brandguide_new: "Új logó",
-    comparing: "Színek",
-    processing: "Tipográfia",
-    visual: "Vizuális nyelv",
+    scoring: "Pontozás",
+    summary: "Összefoglaló",
+    details: "Részletes elemzés",
+    processing: "Feldolgozás",
     saving: "Mentés",
     complete: "Kész",
+    // Rebranding phases
+    vision_old: "Régi kép",
+    vision_new: "Új kép",
+    brandguide_old: "Régi logó",
+    brandguide_new: "Új logó",
+    comparing: "Összehasonlítás",
 };
 
 // Phase steps for the progress indicator
-const phaseSteps: Phase[] = ["vision", "brandguide_analysis", "comparing", "processing", "visual", "saving"];
+const phaseSteps: Phase[] = ["vision", "scoring", "summary", "details", "processing", "saving"];
 const rebrandingPhaseSteps: Phase[] = ["vision_old", "brandguide_old", "vision_new", "brandguide_new", "comparing", "saving"];
 
 export default function TestPage() {
@@ -107,6 +112,7 @@ export default function TestPage() {
     const [streamingPhase, setStreamingPhase] = useState<Phase>("start");
     const [streamingText, setStreamingText] = useState("");
     const [cyclingMessage, setCyclingMessage] = useState("");
+    const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
     const [displayedMessage, setDisplayedMessage] = useState("");
 
@@ -118,16 +124,13 @@ export default function TestPage() {
         if (streamingPhase === "start" || streamingPhase === "vision" || streamingPhase === "vision_old" || streamingPhase === "vision_new") {
             // During vision phase, cycle through vision messages
             messages = LOADING_MESSAGES.vision;
-        } else if (streamingPhase === "brandguide_analysis" || streamingPhase === "brandguide_old" || streamingPhase === "brandguide_new") {
+        } else if (streamingPhase === "scoring" || streamingPhase === "brandguide_old" || streamingPhase === "brandguide_new") {
             // During scoring phase, cycle through criteria
             messages = LOADING_MESSAGES.scoring;
-        } else if (streamingPhase === "comparing") {
-            messages = LOADING_MESSAGES.colors;
-        } else if (streamingPhase === "processing") {
-            messages = LOADING_MESSAGES.typography;
-        } else if (streamingPhase === "visual") {
-            messages = LOADING_MESSAGES.visual;
-        } else if (streamingPhase === "saving") {
+        } else if (streamingPhase === "details" || streamingPhase === "comparing") {
+            // During details phase, cycle through color/typography messages
+            messages = [...LOADING_MESSAGES.colors, ...LOADING_MESSAGES.typography, ...LOADING_MESSAGES.visual];
+        } else if (streamingPhase === "processing" || streamingPhase === "saving") {
             messages = LOADING_MESSAGES.processing;
         }
 
@@ -286,6 +289,9 @@ export default function TestPage() {
                                     break;
                                 case "chunk":
                                     setStreamingText((prev) => prev + parsed.text);
+                                    break;
+                                case "debug":
+                                    setDebugLogs((prev) => [...prev, parsed.message]);
                                     break;
                                 case "complete":
                                     setStreamingPhase("complete");
@@ -450,6 +456,20 @@ export default function TestPage() {
                                     {streamingText.slice(0, 300)}
                                     {streamingText.length > 300 && "..."}
                                 </p>
+                            </div>
+                        )}
+
+                        {/* Debug logs */}
+                        {debugLogs.length > 0 && (
+                            <div className="mt-4 rounded-xl border border-yellow-700/50 bg-yellow-900/20 p-4 text-left">
+                                <p className="mb-2 text-xs font-medium uppercase tracking-widest text-yellow-500">
+                                    Debug Log
+                                </p>
+                                <div className="max-h-48 overflow-y-auto space-y-1 font-mono text-xs text-yellow-300/80">
+                                    {debugLogs.map((log, i) => (
+                                        <p key={i}>{log}</p>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>

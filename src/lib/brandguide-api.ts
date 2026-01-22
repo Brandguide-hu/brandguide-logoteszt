@@ -12,6 +12,7 @@ import { buildVisionPrompt } from './prompts-v2';
 
 const BRANDGUIDE_ENDPOINT = process.env.BRANDGUIDE_ENDPOINT || 'https://udqiowvplrkdrviahylk.supabase.co/functions/v1/partner-api';
 const BRANDGUIDE_API_KEY = process.env.BRANDGUIDE_API_KEY;
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
 
 // ============================================================================
 // CLAUDE VISION - "Vakvezető Designer"
@@ -36,11 +37,12 @@ export async function analyzeImageWithVision(
 
   console.log('[VISION] Analyzing image with Claude Vision (Vakvezető Designer)...');
   console.log('[VISION] API Key prefix:', apiKey.substring(0, 10) + '...');
+  console.log('[VISION] Using model:', CLAUDE_MODEL);
   if (userColors?.length) console.log('[VISION] User colors:', userColors.join(', '));
   if (userFontName) console.log('[VISION] User font name:', userFontName);
 
   const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: CLAUDE_MODEL,
     max_tokens: 2000,
     messages: [
       {
@@ -154,11 +156,8 @@ export async function queryBrandguideAI(
     );
   }
 
-  // Check query length
-  if (query.length > 5000) {
-    console.warn('[BRANDGUIDE API] Query too long:', query.length, 'characters, truncating...');
-    query = query.substring(0, 5000);
-  }
+  // Log query length (no truncation - limit has been increased)
+  console.log('[BRANDGUIDE API] Query length:', query.length, 'characters');
 
   try {
     console.log('[BRANDGUIDE API] Sending query, length:', query.length);
@@ -176,6 +175,13 @@ export async function queryBrandguideAI(
 
     console.log('[BRANDGUIDE API] Response status:', response.status);
     console.log('[BRANDGUIDE API] Answer length:', data.answer?.length || 0);
+
+    // Check if response looks truncated
+    const answer = data.answer || '';
+    const trimmed = answer.trim();
+    if (trimmed && !trimmed.endsWith('}') && !trimmed.endsWith('```')) {
+      console.warn('[BRANDGUIDE API] WARNING: Response may be truncated! Last 50 chars:', answer.slice(-50));
+    }
 
     if (!response.ok) {
       const error = data.error as BrandguideError;
@@ -254,8 +260,11 @@ function tryRepairJSON(jsonStr: string): string {
     repaired += '"';
   }
 
-  // Remove trailing comma if present
+  // Remove trailing incomplete key-value pairs and commas
+  // This handles cases like: "key": "truncated value
+  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, '');
   repaired = repaired.replace(/,\s*$/, '');
+  repaired = repaired.replace(/:\s*$/, ': null');
 
   // Close open brackets
   while (openBrackets > 0) {
@@ -283,17 +292,26 @@ export function parseJSONResponse<T>(response: string, errorMessage: string): T 
     }
   };
 
-  // Try to extract JSON from markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  // Try to extract JSON from markdown code blocks (with or without closing ```)
+  const jsonMatchClosed = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const jsonMatchOpen = response.match(/```(?:json)?\s*([\s\S]*)/);
+  const jsonMatch = jsonMatchClosed || jsonMatchOpen;
+
   if (jsonMatch) {
-    const result = tryParse(jsonMatch[1].trim());
-    if (result) return result;
+    const jsonContent = jsonMatch[1].trim();
+    console.log('[PARSE] Found JSON in code block, length:', jsonContent.length);
+    const result = tryParse(jsonContent);
+    if (result) {
+      console.log('[PARSE] Parsed successfully, keys:', Object.keys(result as object));
+      return result;
+    }
 
     // Try to repair truncated JSON
-    const repaired = tryRepairJSON(jsonMatch[1].trim());
+    const repaired = tryRepairJSON(jsonContent);
     const repairedResult = tryParse(repaired);
     if (repairedResult) {
       console.log('[PARSE] Successfully repaired truncated JSON from code block');
+      console.log('[PARSE] Repaired keys:', Object.keys(repairedResult as object));
       return repairedResult;
     }
   }

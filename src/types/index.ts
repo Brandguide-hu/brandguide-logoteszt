@@ -2,7 +2,7 @@
 export type TestLevel = 'basic' | 'detailed' | 'full' | 'rebranding';
 
 // Minősítési kategóriák
-export type Rating = 'Kiemelkedő' | 'Kiforrott' | 'Jó' | 'Elfogadható' | 'Fejlesztendő' | 'Újragondolandó';
+export type Rating = 'Kivételes' | 'Profi' | 'Jó minőségű' | 'Átlagos' | 'Problémás' | 'Újragondolandó';
 
 // Szempont nevek - JAVÍTOTT kulcsnevek
 export type CriteriaName =

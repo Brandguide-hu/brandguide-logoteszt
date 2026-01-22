@@ -1,45 +1,49 @@
 import { Rating } from '@/types';
 
 export function getRatingFromScore(score: number): Rating {
-  if (score >= 90) return 'Kiemelkedő';
-  if (score >= 80) return 'Kiforrott';
-  if (score >= 65) return 'Jó';
-  if (score >= 50) return 'Elfogadható';
-  if (score >= 35) return 'Fejlesztendő';
+  if (score >= 90) return 'Kivételes';
+  if (score >= 80) return 'Profi';
+  if (score >= 70) return 'Jó minőségű';
+  if (score >= 60) return 'Átlagos';
+  if (score >= 40) return 'Problémás';
   return 'Újragondolandó';
 }
 
 export function getRatingColor(rating: Rating): string {
   switch (rating) {
-    case 'Kiemelkedő':
+    case 'Kivételes':
       return 'var(--color-success-500)';
-    case 'Kiforrott':
+    case 'Profi':
       return 'var(--color-cyan-500)';
-    case 'Jó':
+    case 'Jó minőségű':
       return 'var(--color-blue-500)';
-    case 'Elfogadható':
+    case 'Átlagos':
       return 'var(--color-violet-500)';
-    case 'Fejlesztendő':
+    case 'Problémás':
       return 'var(--color-warning-500)';
     case 'Újragondolandó':
       return 'var(--color-error-500)';
+    default:
+      return 'var(--color-gray-500)';
   }
 }
 
 export function getRatingIcon(rating: Rating): string {
   switch (rating) {
-    case 'Kiemelkedő':
+    case 'Kivételes':
       return '🏆';
-    case 'Kiforrott':
+    case 'Profi':
       return '⭐';
-    case 'Jó':
+    case 'Jó minőségű':
       return '✅';
-    case 'Elfogadható':
+    case 'Átlagos':
       return '👍';
-    case 'Fejlesztendő':
+    case 'Problémás':
       return '⚠️';
     case 'Újragondolandó':
       return '🔴';
+    default:
+      return '❓';
   }
 }
 

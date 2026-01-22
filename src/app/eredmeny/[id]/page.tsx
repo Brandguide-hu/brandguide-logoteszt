@@ -7,12 +7,21 @@ import { supabase } from "@/lib/supabase";
 import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
 import {
     RadarChart,
-    ColorAnalysis,
-    TypographyAnalysis,
-    VisualLanguageAnalysis,
     ResultSkeleton,
+    ResultSidebar,
 } from "@/components/results";
-import { ArrowRight, ArrowLeft, RefreshCw05, Copy01, Check, Share07, AlertCircle, ThumbsUp, ThumbsDown } from "@untitledui/icons";
+import { ArrowLeft, RefreshCw05, AlertCircle, CheckCircle, AlertTriangle, Lightbulb02 } from "@untitledui/icons";
+
+// Criteria emoji icons (matching vertical design)
+const CRITERIA_EMOJIS: Record<string, string> = {
+    megkulonboztethetoseg: "🎯",
+    egyszeruseg: "✨",
+    alkalmazhatosag: "📐",
+    emlekezetesseg: "💡",
+    idotallosag: "⏳",
+    univerzalitas: "🌍",
+    lathatosag: "👁️",
+};
 
 export default function ResultPage() {
     const params = useParams();
@@ -23,7 +32,7 @@ export default function ResultPage() {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [copied, setCopied] = useState(false);
+    const [activeTab, setActiveTab] = useState<CriteriaName>("megkulonboztethetoseg");
 
     useEffect(() => {
         async function fetchResult() {
@@ -54,40 +63,6 @@ export default function ResultPage() {
         fetchResult();
     }, [id, router]);
 
-    const getShareUrl = () => {
-        if (typeof window !== "undefined") {
-            return window.location.href;
-        }
-        return "";
-    };
-
-    const getShareText = () => {
-        return `A logóm ${result?.osszpontszam}/100 pontot kapott a LogoLab-on!`;
-    };
-
-    const handleCopyUrl = async () => {
-        const url = getShareUrl();
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    const handleShareFacebook = () => {
-        const url = encodeURIComponent(getShareUrl());
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "width=600,height=400");
-    };
-
-    const handleShareLinkedIn = () => {
-        const url = encodeURIComponent(getShareUrl());
-        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, "_blank", "width=600,height=400");
-    };
-
-    const handleShareX = () => {
-        const url = encodeURIComponent(getShareUrl());
-        const text = encodeURIComponent(getShareText());
-        window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "width=600,height=400");
-    };
-
     // Loading state - show skeleton UI
     if (loading) {
         return <ResultSkeleton />;
@@ -101,12 +76,12 @@ export default function ResultPage() {
                     <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-red-50">
                         <AlertCircle className="size-8 text-red-500" />
                     </div>
-                    <h1 className="mb-2 text-2xl font-light text-gray-900">{error || "Eredmény nem található"}</h1>
-                    <p className="mb-8 text-gray-500">
+                    <h1 className="mb-2 text-2xl font-bold text-[#1f2937]">{error || "Eredmény nem található"}</h1>
+                    <p className="mb-8 text-[#6b7280]">
                         Lehet, hogy az elemzés már nem elérhető, vagy hibás a link.
                     </p>
                     <Link href="/teszt">
-                        <button className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-6 py-3 font-medium text-white transition-all hover:bg-gray-800">
+                        <button className="inline-flex items-center gap-2 rounded-full bg-[#1f2937] px-6 py-3 font-medium text-white transition-all hover:bg-[#374151]">
                             <RefreshCw05 className="size-4" />
                             Új teszt indítása
                         </button>
@@ -116,321 +91,363 @@ export default function ResultPage() {
         );
     }
 
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return "text-emerald-600";
-        if (score >= 60) return "text-[#fff012]";
-        if (score >= 40) return "text-amber-500";
-        return "text-red-500";
+    // Rating color based on score
+    const getRatingStyle = (score: number) => {
+        if (score >= 90) return { color: "text-[#ca8a04]", bg: "bg-[#fef9c3]", label: "Kivételes" };
+        if (score >= 80) return { color: "text-[#9333ea]", bg: "bg-[#f3e8ff]", label: "Profi" };
+        if (score >= 70) return { color: "text-[#16a34a]", bg: "bg-[#f0fdf4]", label: "Jó minőségű" };
+        if (score >= 60) return { color: "text-[#2563eb]", bg: "bg-[#eff6ff]", label: "Átlagos" };
+        if (score >= 40) return { color: "text-[#d97706]", bg: "bg-[#fffbeb]", label: "Problémás" };
+        return { color: "text-[#dc2626]", bg: "bg-[#fef2f2]", label: "Újragondolandó" };
     };
 
+    const ratingStyle = getRatingStyle(result.osszpontszam);
+
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-[#f9fafb]">
             {/* Header */}
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 lg:px-8">
-                <div className="mx-auto grid max-w-5xl grid-cols-3 items-center">
-                    <Link
-                        href="/teszt"
-                        className="inline-flex items-center gap-2 text-sm text-gray-400 transition-colors hover:text-gray-900"
-                    >
-                        <ArrowLeft className="size-4" />
-                        Új teszt
-                    </Link>
-                    <Link href="/" className="justify-self-center">
-                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
-                    </Link>
-                    <div></div>
+            <header className="border-b border-[#e5e7eb] bg-white">
+                <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between">
+                        <Link
+                            href="/teszt"
+                            className="inline-flex items-center gap-2 text-sm text-[#6b7280] transition-colors hover:text-[#1f2937]"
+                        >
+                            <ArrowLeft className="size-4" />
+                            Új teszt
+                        </Link>
+                        <Link href="/">
+                            <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-10" />
+                        </Link>
+                        <div className="w-20" />
+                    </div>
                 </div>
-            </div>
+            </header>
 
-            <div className="px-4 py-12 sm:px-6 md:py-16 lg:px-8">
-                <div className="mx-auto max-w-4xl">
-                    {/* Hero section with score */}
-                    <div className="mb-16 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]">
-                        <p className="mb-4 text-sm text-gray-500">Elemzés kész</p>
-                        <h1 className="mb-8 text-3xl font-light text-gray-900 md:text-4xl">
-                            A logód eredménye
-                        </h1>
+            {/* Main content with sidebar */}
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+                <div className="lg:grid lg:grid-cols-12 lg:gap-8">
+                    {/* Main content area - 8 cols on desktop */}
+                    <div className="lg:col-span-8">
+                        {/* Hero section with logo and score */}
+                        <div className="mb-6 overflow-hidden rounded-3xl border border-[#e5e7eb] bg-white shadow-sm">
+                            <div className="flex flex-col items-center gap-6 p-6 sm:flex-row sm:items-start sm:gap-8 sm:p-8">
+                                {/* Logo */}
+                                {logoUrl && (
+                                    <div className="shrink-0 rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] p-6">
+                                        <img
+                                            src={logoUrl}
+                                            alt="Elemzett logó"
+                                            className="max-h-28 max-w-[180px] object-contain"
+                                        />
+                                    </div>
+                                )}
 
-                        {/* Score and logo side by side */}
-                        <div className="flex flex-col items-center gap-12 md:flex-row md:justify-center">
-                            {/* Logo */}
-                            {logoUrl && (
-                                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-8">
-                                    <img
-                                        src={logoUrl}
-                                        alt="Feltöltött logó"
-                                        className="max-h-32 max-w-[200px] object-contain"
-                                    />
+                                {/* Score and rating */}
+                                <div className="flex-1 text-center sm:text-left">
+                                    <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[#6b7280]">
+                                        Összpontszám
+                                    </p>
+                                    <div className="flex items-baseline gap-1 justify-center sm:justify-start">
+                                        <span className="text-5xl font-bold text-[#1f2937]">
+                                            {result.osszpontszam}
+                                        </span>
+                                        <span className="text-xl text-[#6b7280]">/100</span>
+                                    </div>
+                                    <div className={`mt-3 inline-block rounded-lg px-3 py-1.5 text-sm font-semibold ${ratingStyle.bg} ${ratingStyle.color}`}>
+                                        {result.minosites}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Summary */}
+                        <div className="mb-6 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                            <h2 className="mb-3 text-xl font-bold text-[#1f2937]">
+                                Összefoglaló
+                            </h2>
+                            <p className="text-[16px] leading-[26px] text-[#37352f]">
+                                {result.osszegzes}
+                            </p>
+                        </div>
+
+                        {/* Strengths & Weaknesses - Two column */}
+                        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                            {/* Strengths - green-50 bg, green-800 title, green-700 text, green-500 dots */}
+                            <div className="rounded-lg bg-[#f0fdf4] p-4">
+                                <div className="mb-3 flex items-center gap-2">
+                                    <CheckCircle className="size-5 text-[#16a34a]" />
+                                    <h3 className="font-bold text-[#047857]">Erősségek</h3>
+                                </div>
+                                {result.erossegek && result.erossegek.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {result.erossegek.map((item, index) => (
+                                            <li key={index} className="flex items-start gap-2 text-sm text-[#15803d]">
+                                                <span className="mt-1.5 text-[8px] text-[#10b981]">●</span>
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-[#6b7280] italic">Nincs kiemelendő erősség</p>
+                                )}
+                            </div>
+
+                            {/* Weaknesses - amber-50 bg, amber-800 title, amber-700 text, amber-500 dots */}
+                            <div className="rounded-lg bg-[#fffbeb] p-4">
+                                <div className="mb-3 flex items-center gap-2">
+                                    <AlertTriangle className="size-5 text-[#d97706]" />
+                                    <h3 className="font-bold text-[#92400e]">Fejlesztendő</h3>
+                                </div>
+                                {result.fejlesztendo && result.fejlesztendo.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {result.fejlesztendo.map((item, index) => (
+                                            <li key={index} className="flex items-start gap-2 text-sm text-[#b45309]">
+                                                <span className="mt-1.5 text-[8px] text-[#d97706]">●</span>
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-[#6b7280] italic">Nincs kiemelendő fejlesztendő terület</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Radar Chart */}
+                        <div className="mb-6 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                            <h2 className="mb-4 text-xl font-bold text-[#1f2937]">
+                                Szempontok áttekintése
+                            </h2>
+                            <RadarChart result={result} />
+                        </div>
+
+                        {/* Criteria Details - Tabbed layout like vertical */}
+                        <div className="mb-6">
+                            <h2 className="mb-4 text-xl font-bold text-[#1f2937]">
+                                Részletes értékelés
+                            </h2>
+                            <div className="flex gap-4">
+                                {/* Left side - Tab list */}
+                                <div className="w-64 shrink-0 space-y-1">
+                                    {Object.entries(result.szempontok).map(([key, value]) => {
+                                        const criteriaKey = key as CriteriaName;
+                                        const meta = CRITERIA_META[criteriaKey];
+                                        if (!meta) return null;
+
+                                        const emoji = CRITERIA_EMOJIS[key] || "🎯";
+                                        const isActive = activeTab === key;
+
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => setActiveTab(criteriaKey)}
+                                                className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-left transition-all ${
+                                                    isActive
+                                                        ? "border border-[#e5e7eb] bg-white shadow-sm"
+                                                        : "hover:bg-[#f3f4f6] hover:shadow-sm"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-base">{emoji}</span>
+                                                    <span className={`text-sm font-medium ${isActive ? "text-[#1f2937]" : "text-[#6b7280]"}`}>
+                                                        {meta.displayName}
+                                                    </span>
+                                                </div>
+                                                <span className="rounded-full bg-[#fef2f2] px-2 py-0.5 text-xs font-semibold text-[#ef4444]">
+                                                    {value.pont}/{meta.maxScore}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Right side - Active tab content */}
+                                <div className="flex-1 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                    {(() => {
+                                        const value = result.szempontok[activeTab];
+                                        const meta = CRITERIA_META[activeTab];
+                                        if (!value || !meta) return null;
+
+                                        return (
+                                            <>
+                                                {/* Header with score */}
+                                                <div className="mb-4 flex items-start justify-between">
+                                                    <h3 className="text-xl font-bold text-[#1f2937]">
+                                                        {meta.displayName}
+                                                    </h3>
+                                                    <div className="text-right">
+                                                        <span className="text-4xl font-bold text-[#1f2937]">{value.pont}</span>
+                                                        <span className="text-xl text-[#6b7280]"> / {meta.maxScore}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Progress bar */}
+                                                <div className="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-[#e5e7eb]">
+                                                    <div
+                                                        className="h-full rounded-full bg-[#fcd34d] transition-all duration-300"
+                                                        style={{ width: `${(value.pont / meta.maxScore) * 100}%` }}
+                                                    />
+                                                </div>
+
+                                                {/* Description */}
+                                                <p className="mb-6 text-[16px] leading-[26px] text-[#787774]">
+                                                    {value.indoklas}
+                                                </p>
+
+                                                {/* Suggestions */}
+                                                {value.javaslatok && value.javaslatok.length > 0 && (
+                                                    <div className="rounded-lg bg-[#fefce8] p-4">
+                                                        <div className="mb-3 flex items-center gap-2">
+                                                            <Lightbulb02 className="size-4 text-[#ca8a04]" />
+                                                            <h4 className="font-semibold text-[#ca8a04]">Javaslatok</h4>
+                                                        </div>
+                                                        <ul className="space-y-2">
+                                                            {value.javaslatok.map((javaslat, index) => (
+                                                                <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-[#787774]">
+                                                                    <span className="mt-2 text-[8px] text-[#ca8a04]">●</span>
+                                                                    {javaslat}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Color, Typography Analysis - Two column grid */}
+                        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                            {/* Color Analysis - purple accent */}
+                            {result.szinek && (
+                                <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                    <div className="mb-5 flex items-center gap-3">
+                                        <span className="text-2xl">🎨</span>
+                                        <h3 className="text-xl font-semibold text-[#1f2937]">Színpaletta elemzés</h3>
+                                    </div>
+                                    <div className="space-y-5">
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Harmónia</h4>
+                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.harmonia}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Pszichológia</h4>
+                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.pszichologia}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#22c55e]">Technikai</h4>
+                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.technikai}</p>
+                                        </div>
+                                        {result.szinek.javaslatok && result.szinek.javaslatok.length > 0 && (
+                                            <div className="border-t border-[#e5e7eb] pt-5">
+                                                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Javaslatok</h4>
+                                                <ul className="space-y-2">
+                                                    {result.szinek.javaslatok.map((javaslat, index) => (
+                                                        <li key={index} className="flex items-start gap-2 text-[14px] leading-[23px] text-[#787774]">
+                                                            <span className="mt-1.5 text-[8px] text-[#a78bfa]">●</span>
+                                                            {javaslat}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Score */}
-                            <div className="text-center">
-                                <div className={`text-8xl font-extralight ${getScoreColor(result.osszpontszam)} md:text-9xl`}>
-                                    {result.osszpontszam}
-                                </div>
-                                <div className="mt-2 text-sm text-gray-400">/ 100 pont</div>
-                                <div className="mt-4 inline-block rounded-full bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-700">
-                                    {result.minosites}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Summary */}
-                    <div
-                        className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                        style={{ animationDelay: "0.1s" }}
-                    >
-                        <h2 className="mb-4 text-sm font-medium uppercase tracking-widest text-gray-400">
-                            Összefoglaló
-                        </h2>
-                        <p className="text-lg leading-relaxed text-gray-600">
-                            {result.osszegzes}
-                        </p>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="mx-auto mb-12 h-px w-16 bg-gray-100" />
-
-                    {/* Strengths & Weaknesses */}
-                    <div
-                        className="mb-12 grid gap-6 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards] md:grid-cols-2"
-                        style={{ animationDelay: "0.2s" }}
-                    >
-                        {/* Strengths */}
-                        <div className="rounded-xl border border-gray-100 bg-white p-6">
-                            <div className="mb-4 flex items-center gap-2">
-                                <div className="rounded-lg bg-emerald-50 p-1.5">
-                                    <ThumbsUp className="size-4 text-emerald-600" />
-                                </div>
-                                <h3 className="text-sm font-medium text-gray-900">Erősségek</h3>
-                            </div>
-                            <ul className="space-y-3">
-                                {result.erossegek.map((item, index) => (
-                                    <li key={index} className="flex items-start gap-3 text-sm text-gray-600">
-                                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500" />
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {/* Weaknesses */}
-                        <div className="rounded-xl border border-gray-100 bg-white p-6">
-                            <div className="mb-4 flex items-center gap-2">
-                                <div className="rounded-lg bg-amber-50 p-1.5">
-                                    <ThumbsDown className="size-4 text-amber-600" />
-                                </div>
-                                <h3 className="text-sm font-medium text-gray-900">Fejlesztendő</h3>
-                            </div>
-                            <ul className="space-y-3">
-                                {result.fejlesztendo.map((item, index) => (
-                                    <li key={index} className="flex items-start gap-3 text-sm text-gray-600">
-                                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amber-500" />
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
-
-                    {/* Radar Chart */}
-                    <div
-                        className="mb-12 rounded-xl border border-gray-100 bg-white p-6 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                        style={{ animationDelay: "0.3s" }}
-                    >
-                        <h2 className="mb-6 text-sm font-medium uppercase tracking-widest text-gray-400">
-                            Szempontok áttekintése
-                        </h2>
-                        <RadarChart result={result} />
-                    </div>
-
-                    {/* Criteria Details */}
-                    <div
-                        className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                        style={{ animationDelay: "0.4s" }}
-                    >
-                        <div className="mb-6 flex items-center gap-3">
-                            <h2 className="text-sm font-medium uppercase tracking-widest text-gray-400">
-                                Részletes értékelés
-                            </h2>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-                                7 szempont
-                            </span>
-                        </div>
-                        <div className="space-y-3">
-                            {Object.entries(result.szempontok).map(([key, value]) => {
-                                const criteriaKey = key as CriteriaName;
-                                const meta = CRITERIA_META[criteriaKey];
-                                if (!meta) return null;
-
-                                const percentage = (value.pont / meta.maxScore) * 100;
-
-                                return (
-                                    <div
-                                        key={key}
-                                        className="group rounded-xl border border-gray-100 bg-white p-5 transition-all duration-300 hover:border-gray-200 hover:shadow-sm"
-                                    >
-                                        <div className="mb-3 flex items-center justify-between">
-                                            <h3 className="font-medium text-gray-900">{meta.displayName}</h3>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-gray-400">{value.pont}/{meta.maxScore}</span>
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-300 ${
-                                                    percentage >= 70
-                                                        ? "bg-emerald-50 text-emerald-700"
-                                                        : percentage >= 50
-                                                          ? "bg-[#fff012]/20 text-gray-700"
-                                                          : "bg-amber-50 text-amber-700"
-                                                }`}>
-                                                    {Math.round(percentage)}%
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                                            <div
-                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                    percentage >= 70
-                                                        ? "bg-emerald-500"
-                                                        : percentage >= 50
-                                                          ? "bg-[#fff012]"
-                                                          : "bg-amber-500"
-                                                }`}
-                                                style={{ width: `${percentage}%` }}
-                                            />
-                                        </div>
-                                        <p className="text-sm text-gray-500">{value.indoklas}</p>
+                            {/* Typography Analysis - blue accent */}
+                            {result.tipografia && (
+                                <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                    <div className="mb-5 flex items-center gap-3">
+                                        <span className="text-2xl">🔤</span>
+                                        <h3 className="text-xl font-semibold text-[#1f2937]">Tipográfia elemzés</h3>
                                     </div>
-                                );
-                            })}
+                                    <div className="space-y-5">
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Karakter</h4>
+                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.tipografia.karakter}</p>
+                                        </div>
+                                        <div className="border-t border-[#e5e7eb] pt-5">
+                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Olvashatóság</h4>
+                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.tipografia.olvashatosag}</p>
+                                        </div>
+                                        {result.tipografia.javaslatok && result.tipografia.javaslatok.length > 0 && (
+                                            <div className="border-t border-[#e5e7eb] pt-5">
+                                                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Javaslatok</h4>
+                                                <ul className="space-y-2">
+                                                    {result.tipografia.javaslatok.map((javaslat, index) => (
+                                                        <li key={index} className="flex items-start gap-2 text-[14px] leading-[23px] text-[#787774]">
+                                                            <span className="mt-1.5 text-[8px] text-[#93c5fd]">●</span>
+                                                            {javaslat}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Visual Language - Full width */}
+                        {result.vizualisNyelv && (
+                            <div className="mb-6 rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <span className="text-2xl">🎭</span>
+                                    <h3 className="text-xl font-semibold text-[#1f2937]">Vizuális nyelv elemzés</h3>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <div>
+                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Formák</h4>
+                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.formak}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Elemek</h4>
+                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.elemek}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Stílusegység</h4>
+                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.stilusEgyseg}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CTA */}
+                        <div className="rounded-lg bg-[#1f2937] p-8 text-center sm:p-10">
+                            <span className="mb-4 inline-block rounded-full bg-[#fcd34d] px-4 py-1.5 text-xs font-bold text-[#1f2937]">
+                                brandguide/AI
+                            </span>
+                            <h2 className="mb-3 text-2xl font-bold text-white sm:text-3xl">
+                                Szeretnéd továbbfejleszteni a brandedet?
+                            </h2>
+                            <p className="mx-auto mb-8 max-w-xl text-[#9ca3af]">
+                                A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
+                            </p>
+                            <a href="https://ai.brandguide.hu/" target="_blank" rel="noopener noreferrer">
+                                <button className="group inline-flex items-center gap-3 rounded-full bg-[#fcd34d] px-8 py-4 font-semibold text-[#1f2937] transition-all hover:bg-[#fbbf24] hover:shadow-lg">
+                                    Ismerkedj meg a brandguide/AI-jal
+                                    <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                </button>
+                            </a>
                         </div>
                     </div>
 
-                    {/* Color & Typography Analysis */}
-                    {result.szinek && (
-                        <div
-                            className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                            style={{ animationDelay: "0.5s" }}
-                        >
-                            <ColorAnalysis analysis={result.szinek} />
-                        </div>
-                    )}
-
-                    {result.tipografia && (
-                        <div
-                            className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                            style={{ animationDelay: "0.6s" }}
-                        >
-                            <TypographyAnalysis analysis={result.tipografia} />
-                        </div>
-                    )}
-
-                    {result.vizualisNyelv && (
-                        <div
-                            className="mb-12 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                            style={{ animationDelay: "0.7s" }}
-                        >
-                            <VisualLanguageAnalysis analysis={result.vizualisNyelv} />
-                        </div>
-                    )}
-
-                    {/* Share section */}
-                    <div
-                        className="mb-12 rounded-xl border border-gray-100 bg-gray-50/50 p-6 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]"
-                        style={{ animationDelay: "0.8s" }}
-                    >
-                        <div className="mb-4 flex items-center gap-2">
-                            <Share07 className="size-4 text-gray-400" />
-                            <h3 className="text-sm font-medium text-gray-900">Eredmény megosztása</h3>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                onClick={handleCopyUrl}
-                                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 transition-all hover:border-gray-300 hover:shadow-sm"
-                            >
-                                {copied ? (
-                                    <>
-                                        <Check className="size-4 text-emerald-500" />
-                                        Másolva!
-                                    </>
-                                ) : (
-                                    <>
-                                        <Copy01 className="size-4" />
-                                        Link másolása
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                onClick={handleShareFacebook}
-                                className="inline-flex items-center gap-2 rounded-full bg-[#1877F2] px-4 py-2 text-sm text-white transition-all hover:bg-[#1877F2]/90"
-                            >
-                                Facebook
-                            </button>
-                            <button
-                                onClick={handleShareLinkedIn}
-                                className="inline-flex items-center gap-2 rounded-full bg-[#0A66C2] px-4 py-2 text-sm text-white transition-all hover:bg-[#0A66C2]/90"
-                            >
-                                LinkedIn
-                            </button>
-                            <button
-                                onClick={handleShareX}
-                                className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm text-white transition-all hover:bg-gray-800"
-                            >
-                                X
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div
-                        className="mb-12 flex flex-col items-center gap-4 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards] sm:flex-row sm:justify-center"
-                        style={{ animationDelay: "0.9s" }}
-                    >
-                        <Link href="/teszt">
-                            <button className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:shadow-sm">
-                                <RefreshCw05 className="size-4" />
-                                Új teszt indítása
-                            </button>
-                        </Link>
-                    </div>
-
-                    {/* CTA */}
-                    <div
-                        className="rounded-2xl bg-gray-900 p-8 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards] md:p-12"
-                        style={{ animationDelay: "1.0s" }}
-                    >
-                        <span className="mb-4 inline-block rounded-full bg-[#fff012] px-3 py-1 text-xs font-medium text-gray-900">
-                            brandguide/AI
-                        </span>
-                        <h2 className="mb-3 text-2xl font-light text-white md:text-3xl">
-                            Szeretnéd továbbfejleszteni a brandedet?
-                        </h2>
-                        <p className="mx-auto mb-8 max-w-xl text-gray-400">
-                            A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
-                        </p>
-                        <a href="https://brandguide.hu" target="_blank" rel="noopener noreferrer">
-                            <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-medium text-gray-900 transition-all hover:shadow-lg hover:shadow-[#fff012]/20">
-                                Ismerkedj meg a brandguide/AI-jal
-                                <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
-                            </button>
-                        </a>
+                    {/* Sidebar - 4 cols on desktop */}
+                    <div className="mt-8 lg:col-span-4 lg:mt-0">
+                        <ResultSidebar
+                            logoUrl={logoUrl}
+                            score={result.osszpontszam}
+                            rating={result.minosites}
+                        />
                     </div>
                 </div>
-            </div>
-
-            {/* Global animations */}
-            <style jsx global>{`
-                @keyframes fadeSlideUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(20px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-            `}</style>
+            </main>
         </div>
     );
 }

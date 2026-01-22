@@ -634,7 +634,7 @@ export default function RebrandingResultPage() {
                         <p className="mx-auto mb-8 max-w-xl text-gray-400">
                             A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
                         </p>
-                        <a href="https://brandguide.hu" target="_blank" rel="noopener noreferrer">
+                        <a href="https://ai.brandguide.hu/" target="_blank" rel="noopener noreferrer">
                             <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-medium text-gray-900 transition-all hover:shadow-lg hover:shadow-[#fff012]/20">
                                 Ismerkedj meg a brandguide/AI-jal
                                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />

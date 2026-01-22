@@ -6,3 +6,4 @@ export { ColorAnalysis } from "./ColorAnalysis";
 export { TypographyAnalysis } from "./TypographyAnalysis";
 export { VisualLanguageAnalysis } from "./VisualLanguageAnalysis";
 export { ResultSkeleton } from "./ResultSkeleton";
+export { ResultSidebar } from "./ResultSidebar";
