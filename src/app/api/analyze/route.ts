@@ -126,30 +126,48 @@ function normalizeCriteriaKey(key: string): string {
 }
 
 /**
+ * Find a value in criteria by checking accent-stripped key variations
+ */
+function findCriteriaValue(criteria: Record<string, unknown> | undefined, targetKey: string): unknown {
+  if (!criteria) return undefined;
+  // First try exact match
+  if (criteria[targetKey] !== undefined) return criteria[targetKey];
+  // Then search by accent-stripped key
+  const strippedTarget = targetKey.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const key of Object.keys(criteria)) {
+    const strippedKey = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (strippedKey === strippedTarget) {
+      return criteria[key];
+    }
+  }
+  return undefined;
+}
+
+/**
  * Clamp and validate a single criteria score
  * Handles variations from brandguideAI:
- * - pont vs pontszam (score key variations)
- * - indoklas (string) vs indoklasok (array)
+ * - pont vs pontszam (score key variations, with/without accents)
+ * - indoklas/indoklás (string or array)
+ * - javaslatok/javaslatok (array)
  */
 function clampCriteria(criteria: Record<string, unknown> | undefined, maxPont: number): CriteriaScoreResponse {
-  // Handle pont vs pontszam variation - brandguideAI sometimes uses "pontszam" instead of "pont"
-  const rawPont = (criteria?.pont as number) ?? (criteria?.pontszam as number) ?? 0;
+  // Handle pont vs pontszam variation (with/without accents)
+  const pontValue = findCriteriaValue(criteria, 'pont') ?? findCriteriaValue(criteria, 'pontszam');
+  const rawPont = typeof pontValue === 'number' ? pontValue : 0;
   const pont = Math.min(Math.max(0, rawPont), maxPont); // Clamp between 0 and maxPont
 
-  // Handle indoklas variations: string or array (indoklasok)
+  // Handle indoklas variations: string or array (with/without accents)
   let indoklas = '';
-  if (typeof criteria?.indoklas === 'string') {
-    indoklas = criteria.indoklas;
-  } else if (Array.isArray(criteria?.indoklasok)) {
-    // brandguideAI sometimes returns indoklasok as array - join them
-    indoklas = (criteria.indoklasok as string[]).join(' ');
-  } else if (Array.isArray(criteria?.indoklas)) {
-    // Sometimes indoklas itself is an array
-    indoklas = (criteria.indoklas as string[]).join(' ');
+  const indoklasValue = findCriteriaValue(criteria, 'indoklas') ?? findCriteriaValue(criteria, 'indoklasok');
+  if (typeof indoklasValue === 'string') {
+    indoklas = indoklasValue;
+  } else if (Array.isArray(indoklasValue)) {
+    indoklas = (indoklasValue as string[]).join(' ');
   }
 
-  // Handle javaslatok
-  const javaslatok = Array.isArray(criteria?.javaslatok) ? criteria.javaslatok as string[] : [];
+  // Handle javaslatok (with/without accents)
+  const javaslatokValue = findCriteriaValue(criteria, 'javaslatok');
+  const javaslatok = Array.isArray(javaslatokValue) ? javaslatokValue as string[] : [];
 
   return {
     pont,
@@ -206,13 +224,14 @@ function validateScoringData(data: Record<string, unknown>): ScoringResponse {
     effectiveData = data[wrapperKey] as Record<string, unknown>;
   }
 
-  // brandguideAI sometimes uses 'szempontok', sometimes 'ertekeles'/'értékelés' - accept all variations
+  // brandguideAI uses varying keys: 'szempontok', 'ertekeles'/'értékelés', 'kriteriumok'/'kritériumok'
   // Find the actual key by checking accent-stripped versions
+  const szempontokPatterns = ['szempontok', 'ertekeles', 'kriteriumok'];
   let rawSzempontok: Record<string, unknown> = {};
   let szempontokSource = 'empty';
   for (const key of Object.keys(effectiveData)) {
     const stripped = stripAccents(key);
-    if (stripped === 'szempontok' || stripped === 'ertekeles') {
+    if (szempontokPatterns.includes(stripped)) {
       if (typeof effectiveData[key] === 'object' && effectiveData[key] !== null) {
         rawSzempontok = effectiveData[key] as Record<string, unknown>;
         szempontokSource = key;
