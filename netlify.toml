@@ -1,0 +1,5 @@
+[functions]
+  external_node_modules = ["@anthropic-ai/sdk"]
+
+[functions."___netlify-server-handler"]
+  included_files = ["node_modules/@anthropic-ai/sdk/**"]

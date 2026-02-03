@@ -183,9 +183,26 @@ export async function POST(request: NextRequest) {
     await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
   };
 
+  // Heartbeat to keep Netlify function alive during long API calls
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  const startHeartbeat = () => {
+    heartbeatInterval = setInterval(async () => {
+      try {
+        await writer.write(encoder.encode(': heartbeat\n\n'));
+      } catch { /* stream closed */ }
+    }, 3000);
+  };
+  const stopHeartbeat = () => {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  };
+
   // Start the streaming response
   const responsePromise = (async () => {
     try {
+      startHeartbeat();
       await sendEvent('status', { message: 'Elemzés indítása...', phase: 'start' });
 
       let visionDescription: string;
@@ -380,10 +397,12 @@ export async function POST(request: NextRequest) {
       console.log('[ANALYZE V4] Analysis saved with ID:', insertedData.id);
 
       // Send final result
+      stopHeartbeat();
       await sendEvent('complete', { id: insertedData.id, result });
       await writer.close();
 
     } catch (error) {
+      stopHeartbeat();
       console.error('[ANALYZE V4] Error:', error);
       await sendEvent('error', {
         message: error instanceof Error ? error.message : 'Ismeretlen hiba'
