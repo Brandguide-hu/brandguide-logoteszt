@@ -168,6 +168,9 @@ export async function queryKBExtract<T>(
   console.log('[KB-EXTRACT] Mode:', mode);
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+
     const response = await fetch(BRANDGUIDE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -187,7 +190,10 @@ export async function queryKBExtract<T>(
           language: options?.language ?? 'hu',
         },
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     const responseData = await response.json();
 
@@ -230,6 +236,14 @@ export async function queryKBExtract<T>(
   } catch (error) {
     if (error instanceof BrandguideAPIError) {
       throw error;
+    }
+
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error('[KB-EXTRACT] Request timed out after 55s');
+      throw new BrandguideAPIError(
+        'A kb-extract API nem válaszolt időben (55s timeout). Kérlek próbáld újra.',
+        'TIMEOUT'
+      );
     }
 
     console.error('[KB-EXTRACT] Connection error:', error);
