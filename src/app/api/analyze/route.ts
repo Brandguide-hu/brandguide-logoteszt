@@ -257,6 +257,7 @@ export async function POST(request: NextRequest) {
         console.log('[ANALYZE V4] AI osszpontszam:', rawData.scoring.osszpontszam);
         console.log('[ANALYZE V4] Logo type:', rawData.scoring.logotipus);
         console.log('[ANALYZE V4] Szempontok array length:', rawData.scoring.szempontok?.length);
+        console.log('[ANALYZE V4] Szempontok raw:', JSON.stringify(rawData.scoring.szempontok?.map(s => ({ nev: s.nev, pont: s.pont }))));
 
         // Validate all 7 szempontok are present
         const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);

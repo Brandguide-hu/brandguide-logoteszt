@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
@@ -120,6 +120,11 @@ export default function TestPage() {
     const [streamingText, setStreamingText] = useState("");
     const [cyclingMessage, setCyclingMessage] = useState("");
     const [displayedMessage, setDisplayedMessage] = useState("");
+
+    // Memoize blob URLs to prevent creating new ones on every re-render
+    const logoUrl = useMemo(() => logo ? URL.createObjectURL(logo) : null, [logo]);
+    const oldLogoUrl = useMemo(() => oldLogo ? URL.createObjectURL(oldLogo) : null, [oldLogo]);
+    const newLogoUrl = useMemo(() => newLogo ? URL.createObjectURL(newLogo) : null, [newLogo]);
 
     // Cycle through loading messages based on current phase
     useEffect(() => {
@@ -358,7 +363,7 @@ export default function TestPage() {
                                 {oldLogo && (
                                     <div className="flex size-16 items-center justify-center rounded-xl border border-gray-700 bg-gray-800 p-2">
                                         <img
-                                            src={URL.createObjectURL(oldLogo)}
+                                            src={oldLogoUrl!}
                                             alt="Régi logó"
                                             className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
                                         />
@@ -368,7 +373,7 @@ export default function TestPage() {
                                 {newLogo && (
                                     <div className="flex size-16 items-center justify-center rounded-xl border border-gray-700 bg-gray-800 p-2">
                                         <img
-                                            src={URL.createObjectURL(newLogo)}
+                                            src={newLogoUrl!}
                                             alt="Új logó"
                                             className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
                                         />
@@ -379,7 +384,7 @@ export default function TestPage() {
                             logo && (
                                 <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl border border-gray-700 bg-gray-800 p-3">
                                     <img
-                                        src={URL.createObjectURL(logo)}
+                                        src={logoUrl!}
                                         alt="Logo"
                                         className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
                                     />
@@ -626,7 +631,7 @@ export default function TestPage() {
                                             <div className="mt-4 flex justify-center">
                                                 <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                                                     <img
-                                                        src={URL.createObjectURL(oldLogo)}
+                                                        src={oldLogoUrl!}
                                                         alt="Régi logó"
                                                         className="max-h-20 max-w-full object-contain"
                                                     />
@@ -664,7 +669,7 @@ export default function TestPage() {
                                             <div className="mt-4 flex justify-center">
                                                 <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                                                     <img
-                                                        src={URL.createObjectURL(newLogo)}
+                                                        src={newLogoUrl!}
                                                         alt="Új logó"
                                                         className="max-h-20 max-w-full object-contain"
                                                     />
@@ -715,7 +720,7 @@ export default function TestPage() {
                                         <div className="mt-6 flex justify-center">
                                             <div className="rounded-xl border border-gray-100 bg-gray-50 p-6">
                                                 <img
-                                                    src={URL.createObjectURL(logo)}
+                                                    src={logoUrl!}
                                                     alt="Logo preview"
                                                     className="max-h-28 max-w-full object-contain"
                                                 />
