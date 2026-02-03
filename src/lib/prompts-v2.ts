@@ -524,7 +524,7 @@ export const KB_EXTRACT_FULL_SCHEMA = {
     scoring: {
       type: "object",
       properties: {
-        osszpontszam: { type: "integer", description: "0-100 közötti összpontszám" },
+        osszpontszam: { type: "integer" },
         logotipus: { type: "string", enum: ["klasszikus_logo", "kampany_badge", "illusztracio_jellegu"] },
         hiresLogo: {
           type: "object",
@@ -538,15 +538,14 @@ export const KB_EXTRACT_FULL_SCHEMA = {
         },
         szempontok: {
           type: "array",
-          description: "KÖTELEZŐEN pontosan 7 elem kell! Ebben a sorrendben: megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag. MINDEN szempont kötelező, ne hagyd ki egyiket sem!",
           items: {
             type: "object",
             properties: {
-              nev: { type: "string", description: "A szempont neve: megkulonboztethetoseg|egyszeruseg|alkalmazhatosag|emlekezetesseg|idotallosag|univerzalitas|lathatosag" },
-              pont: { type: "integer", description: "Pontszám (max értéke szempont-függő, lásd query)" },
-              maxPont: { type: "integer", description: "A szempont maximum pontszáma" },
-              indoklas: { type: "string", description: "1-2 mondatos magyarázat" },
-              javaslatok: { type: "array", items: { type: "string" }, description: "2-3 konkrét javaslat" }
+              nev: { type: "string" },
+              pont: { type: "integer" },
+              maxPont: { type: "integer" },
+              indoklas: { type: "string" },
+              javaslatok: { type: "array", items: { type: "string" } }
             },
             required: ["nev", "pont", "maxPont", "indoklas", "javaslatok"]
           }
@@ -557,9 +556,9 @@ export const KB_EXTRACT_FULL_SCHEMA = {
     summary: {
       type: "object",
       properties: {
-        osszegzes: { type: "string", description: "2-3 mondatos összefoglaló, max 400 karakter" },
-        erossegek: { type: "array", items: { type: "string" }, description: "Max 3 erősség, 2-5 szavas bullet pointok" },
-        fejlesztendo: { type: "array", items: { type: "string" }, description: "Max 3 fejlesztendő, 2-5 szavas bullet pointok" }
+        osszegzes: { type: "string" },
+        erossegek: { type: "array", items: { type: "string" } },
+        fejlesztendo: { type: "array", items: { type: "string" } }
       },
       required: ["osszegzes", "erossegek", "fejlesztendo"]
     },

@@ -14,6 +14,53 @@ import { HeaderAuth } from "@/components/layout/HeaderAuth";
 import { TestLevel } from "@/types";
 import { fileToBase64, getMediaType } from "@/lib/utils";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SSEData = any;
+
+// Helper: Read SSE stream and return final data
+async function readSSEStream(
+    response: Response,
+    onEvent: (event: string, parsed: SSEData) => void
+): Promise<{ data?: SSEData; error?: string }> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Nem sikerült olvasni a választ");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: { data?: SSEData; error?: string } = {};
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+            if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+                try {
+                    const parsed = JSON.parse(line.slice(6));
+                    if (currentEvent === "complete") {
+                        result = { data: parsed };
+                    } else if (currentEvent === "error") {
+                        result = { error: parsed.message };
+                    } else if (currentEvent !== "debug") {
+                        onEvent(currentEvent, parsed);
+                    }
+                } catch {
+                    // Skip malformed JSON
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
 // Loading messages that cycle during analysis
 const LOADING_MESSAGES = {
     vision: [
@@ -241,15 +288,51 @@ export default function TestPage() {
                 const base64 = await fileToBase64(logo!);
                 const mediaType = getMediaType(logo!);
 
-                response = await fetch("/api/analyze", {
+                // === STEP 1: Vision API (separate Netlify function) ===
+                const visionResponse = await fetch("/api/analyze/vision", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         logo: base64,
                         mediaType,
-                        testLevel,
                         colors: testLevel !== "basic" ? colors : undefined,
                         fontName: testLevel !== "basic" && fontName ? fontName : undefined,
+                    }),
+                });
+
+                if (!visionResponse.ok) {
+                    const contentType = visionResponse.headers.get("content-type");
+                    if (contentType?.includes("application/json")) {
+                        const errorData = await visionResponse.json();
+                        throw new Error(errorData.error || "Hiba történt a kép feldolgozása során");
+                    }
+                    throw new Error("Hiba történt a kép feldolgozása során");
+                }
+
+                // Read vision SSE stream
+                const visionResult = await readSSEStream(visionResponse, (event, parsed) => {
+                    if (event === "status") {
+                        setStreamingStatus(parsed.message);
+                        setStreamingPhase(parsed.phase as Phase);
+                    }
+                });
+
+                if (visionResult.error) {
+                    throw new Error(visionResult.error);
+                }
+
+                const visionDescription = visionResult.data?.visionDescription;
+                if (!visionDescription) {
+                    throw new Error("Nem sikerült a kép leírása");
+                }
+
+                // === STEP 2: Extract API (separate Netlify function) ===
+                response = await fetch("/api/analyze/extract", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        visionDescription,
+                        logo: base64,
                     }),
                 });
             }
@@ -263,66 +346,33 @@ export default function TestPage() {
                 throw new Error("Hiba történt az elemzés során");
             }
 
-            const reader = response.body?.getReader();
-            if (!reader) {
-                throw new Error("Nem sikerült olvasni a választ");
+            // Read the main SSE stream (extract or rebranding)
+            const finalResult = await readSSEStream(response, (event, parsed) => {
+                switch (event) {
+                    case "status":
+                        setStreamingStatus(parsed.message);
+                        setStreamingPhase(parsed.phase as Phase);
+                        break;
+                    case "chunk":
+                        setStreamingText((prev: string) => prev + parsed.text);
+                        break;
+                }
+            });
+
+            if (finalResult.error) {
+                throw new Error(finalResult.error);
             }
 
-            const decoder = new TextDecoder();
-            let buffer = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-
-                let currentEvent = "";
-                for (const line of lines) {
-                    if (line.startsWith("event: ")) {
-                        currentEvent = line.slice(7);
-                    } else if (line.startsWith("data: ")) {
-                        const data = line.slice(6);
-                        try {
-                            const parsed = JSON.parse(data);
-
-                            switch (currentEvent) {
-                                case "status":
-                                    setStreamingStatus(parsed.message);
-                                    setStreamingPhase(parsed.phase as Phase);
-                                    break;
-                                case "chunk":
-                                    setStreamingText((prev) => prev + parsed.text);
-                                    break;
-                                case "debug":
-                                    // Debug logs consumed silently (removed from UI)
-                                    break;
-                                case "complete":
-                                    setStreamingPhase("complete");
-                                    setStreamingStatus("Kész!");
-                                    setTimeout(() => {
-                                        if (isRebranding) {
-                                            router.push(`/eredmeny/rebranding/${parsed.id}`);
-                                        } else {
-                                            router.push(`/eredmeny/${parsed.id}`);
-                                        }
-                                    }, 500);
-                                    break;
-                                case "error":
-                                    throw new Error(parsed.message);
-                            }
-                        } catch (e) {
-                            if (e instanceof SyntaxError) {
-                                console.warn("Failed to parse SSE data:", data);
-                            } else {
-                                throw e;
-                            }
-                        }
+            if (finalResult.data?.id) {
+                setStreamingPhase("complete");
+                setStreamingStatus("Kész!");
+                setTimeout(() => {
+                    if (isRebranding) {
+                        router.push(`/eredmeny/rebranding/${finalResult.data.id}`);
+                    } else {
+                        router.push(`/eredmeny/${finalResult.data.id}`);
                     }
-                }
+                }, 500);
             }
         } catch (err) {
             console.error("Analysis error:", err);
