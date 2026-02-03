@@ -277,7 +277,7 @@ export default function RebrandingResultPage() {
                         Új teszt
                     </Link>
                     <Link href="/" className="justify-self-center">
-                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
+                        <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-12" />
                     </Link>
                     <div></div>
                 </div>

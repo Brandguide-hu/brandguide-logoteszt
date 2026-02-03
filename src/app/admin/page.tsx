@@ -1,309 +1,572 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { LinkExternal01, Trash01, Copy01, Check, FileSearch02, Calendar, AlertCircle } from "@untitledui/icons";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/providers/auth-provider';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { CATEGORIES, Category } from '@/types';
 
-interface AnalysisRow {
-    id: string;
-    created_at: string;
-    test_level: string;
-    logo_base64: string;
-    result: {
-        type?: string;
-        osszpontszam?: number;
-        minosites?: string;
-        // Rebranding specific
-        oldLogoAnalysis?: {
-            osszpontszam: number;
-            minosites: string;
-        };
-        newLogoAnalysis?: {
-            osszpontszam: number;
-            minosites: string;
-        };
-    };
+interface Stats {
+  totalAnalyses: number;
+  pendingApprovals: number;
+  publicAnalyses: number;
+  totalUsers: number;
+  paidAnalyses: number;
 }
 
+interface AdminAnalysis {
+  id: string;
+  logo_name: string;
+  creator_name: string;
+  category: Category;
+  tier: string;
+  status: string;
+  visibility: string;
+  is_weekly_winner: boolean;
+  logo_base64: string | null;
+  result: { osszpontszam?: number; minosites?: string } | null;
+  created_at: string;
+  user_id: string;
+}
+
+interface AdminUser {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+  is_admin: boolean;
+  is_email_verified: boolean;
+  created_at: string;
+  analysisCount: number;
+  paidCount: number;
+}
+
+type Tab = 'dashboard' | 'pending' | 'all' | 'users';
+
+const TRUSTED_TOKEN_KEY = 'logolab_admin_trusted';
+
 export default function AdminPage() {
-    const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [deleting, setDeleting] = useState<string | null>(null);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { user, isLoading: authLoading, isAdmin } = useAuth();
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [pendingItems, setPendingItems] = useState<AdminAnalysis[]>([]);
+  const [allItems, setAllItems] = useState<AdminAnalysis[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-    const handleCopyJsonLink = async (id: string) => {
-        const url = `${window.location.origin}/api/result/${id}`;
-        await navigator.clipboard.writeText(url);
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-    };
+  // 2FA state
+  const [twoFAState, setTwoFAState] = useState<'checking' | 'needs_code' | 'entering' | 'verified'>('checking');
+  const [twoFACode, setTwoFACode] = useState('');
+  const [twoFAError, setTwoFAError] = useState('');
+  const [twoFASending, setTwoFASending] = useState(false);
+  const [trustBrowser, setTrustBrowser] = useState(true);
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Biztosan törölni szeretnéd ezt az elemzést?")) return;
+  useEffect(() => {
+    if (!authLoading && (!user || !isAdmin)) {
+      router.push('/');
+      return;
+    }
+    if (user && isAdmin) {
+      check2FA();
+    }
+  }, [user, authLoading, isAdmin]);
 
-        setDeleting(id);
-        try {
-            const { error: dbError } = await supabase.from("analyses").delete().eq("id", id);
+  const check2FA = async () => {
+    const headers = await getAuthHeaders();
+    const trustedToken = localStorage.getItem(TRUSTED_TOKEN_KEY);
 
-            if (dbError) throw dbError;
-            setAnalyses((prev) => prev.filter((a) => a.id !== id));
-        } catch (err) {
-            console.error("Delete error:", err);
-            alert("Nem sikerült törölni az elemzést");
-        } finally {
-            setDeleting(null);
-        }
-    };
-
-    useEffect(() => {
-        async function fetchAnalyses() {
-            try {
-                const { data, error: dbError } = await supabase
-                    .from("analyses")
-                    .select("id, created_at, test_level, logo_base64, result")
-                    .order("created_at", { ascending: false });
-
-                if (dbError) throw dbError;
-                setAnalyses(data || []);
-            } catch (err) {
-                console.error("Fetch error:", err);
-                setError("Nem sikerült betölteni az elemzéseket");
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchAnalyses();
-    }, []);
-
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString("hu-HU", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-    const getScoreStyles = (score: number) => {
-        if (score >= 80) return "bg-emerald-50 text-emerald-700";
-        if (score >= 60) return "bg-[#fff012]/20 text-gray-900";
-        if (score >= 40) return "bg-amber-50 text-amber-700";
-        return "bg-red-50 text-red-700";
-    };
-
-    const getTestLevelLabel = (level: string, resultType?: string) => {
-        // Check if it's a rebranding type
-        if (resultType === "rebranding" || level === "rebranding") {
-            return { label: "Rebranding", style: "bg-purple-100 text-purple-700" };
-        }
-        switch (level) {
-            case "professional":
-                return { label: "Profi", style: "bg-gray-900 text-white" };
-            case "detailed":
-                return { label: "Részletes", style: "bg-[#fff012] text-gray-900" };
-            default:
-                return { label: "Alap", style: "bg-gray-100 text-gray-600" };
-        }
-    };
-
-    // Helper to get score for display (handles both normal and rebranding results)
-    const getDisplayScore = (result: AnalysisRow["result"]) => {
-        if (result.type === "rebranding" && result.newLogoAnalysis) {
-            return result.newLogoAnalysis.osszpontszam;
-        }
-        return result.osszpontszam || 0;
-    };
-
-    // Helper to get rating for display
-    const getDisplayRating = (result: AnalysisRow["result"]) => {
-        if (result.type === "rebranding" && result.newLogoAnalysis) {
-            return result.newLogoAnalysis.minosites;
-        }
-        return result.minosites || "";
-    };
-
-    // Helper to get the correct result page URL
-    const getResultUrl = (analysis: AnalysisRow) => {
-        if (analysis.result.type === "rebranding") {
-            return `/eredmeny/rebranding/${analysis.id}`;
-        }
-        return `/eredmeny/${analysis.id}`;
-    };
-
-    // Loading state
-    if (loading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-white">
-                <div className="text-center">
-                    <div className="mx-auto mb-6 size-12 animate-spin rounded-full border-2 border-gray-200 border-t-[#fff012]" />
-                    <p className="text-gray-500">Elemzések betöltése...</p>
-                </div>
-            </div>
-        );
+    if (trustedToken) {
+      const res = await fetch('/api/auth/check-trusted', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ trustedToken }),
+      });
+      const data = await res.json();
+      if (data.trusted) {
+        setTwoFAState('verified');
+        fetchData();
+        return;
+      }
+      localStorage.removeItem(TRUSTED_TOKEN_KEY);
     }
 
-    // Error state
-    if (error) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-white px-4">
-                <div className="max-w-md text-center">
-                    <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-red-50">
-                        <AlertCircle className="size-8 text-red-500" />
-                    </div>
-                    <h1 className="mb-2 text-2xl font-light text-gray-900">Hiba történt</h1>
-                    <p className="mb-8 text-gray-500">{error}</p>
-                </div>
-            </div>
-        );
-    }
+    setTwoFAState('needs_code');
+  };
 
+  const send2FACode = async () => {
+    setTwoFASending(true);
+    setTwoFAError('');
+    const headers = await getAuthHeaders();
+
+    const res = await fetch('/api/auth/admin-2fa', {
+      method: 'POST',
+      headers,
+    });
+
+    if (res.ok) {
+      setTwoFAState('entering');
+    } else {
+      setTwoFAError('Nem sikerült a kód küldése.');
+    }
+    setTwoFASending(false);
+  };
+
+  const verify2FACode = async () => {
+    setTwoFASending(true);
+    setTwoFAError('');
+    const headers = await getAuthHeaders();
+
+    const res = await fetch('/api/auth/verify-2fa', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code: twoFACode, trustBrowser }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (data.trustedToken) {
+        localStorage.setItem(TRUSTED_TOKEN_KEY, data.trustedToken);
+      }
+      setTwoFAState('verified');
+      fetchData();
+    } else {
+      setTwoFAError(data.error || 'Hibás kód');
+    }
+    setTwoFASending(false);
+  };
+
+  const getAuthHeaders = async () => {
+    const { getSupabaseBrowserClient } = await import('@/lib/supabase/client');
+    const supabase = getSupabaseBrowserClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    return {
+      'Authorization': `Bearer ${session?.access_token || ''}`,
+      'Content-Type': 'application/json',
+    };
+  };
+
+  const fetchData = async () => {
+    const headers = await getAuthHeaders();
+
+    const [statsRes, pendingRes, allRes, usersRes] = await Promise.all([
+      fetch('/api/admin?action=dashboard', { headers }),
+      fetch('/api/admin?action=pending', { headers }),
+      fetch('/api/admin?action=all', { headers }),
+      fetch('/api/admin?action=users', { headers }),
+    ]);
+
+    if (statsRes.ok) {
+      const data = await statsRes.json();
+      setStats(data.stats);
+    }
+    if (pendingRes.ok) {
+      const data = await pendingRes.json();
+      setPendingItems(data.analyses || []);
+    }
+    if (allRes.ok) {
+      const data = await allRes.json();
+      setAllItems(data.analyses || []);
+    }
+    if (usersRes.ok) {
+      const data = await usersRes.json();
+      setUsers(data.users || []);
+    }
+    setIsLoading(false);
+  };
+
+  const handleAction = async (action: string, analysisId: string, reason?: string) => {
+    setActionLoading(analysisId);
+    const headers = await getAuthHeaders();
+
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, analysisId, reason }),
+    });
+
+    if (res.ok) {
+      await fetchData();
+    } else {
+      alert('Hiba történt a művelet során.');
+    }
+    setActionLoading(null);
+  };
+
+  if (authLoading) {
     return (
-        <div className="min-h-screen bg-white">
-            {/* Header */}
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 lg:px-8">
-                <div className="mx-auto flex max-w-6xl items-center justify-between">
-                    <Link
-                        href="/"
-                        className="text-sm text-gray-400 transition-colors hover:text-gray-900"
-                    >
-                        ← Vissza
-                    </Link>
-                    <span className="text-xs font-medium uppercase tracking-widest text-gray-400">
-                        Admin
-                    </span>
-                </div>
-            </div>
-
-            <div className="px-4 py-12 sm:px-6 lg:px-8">
-                <div className="mx-auto max-w-6xl">
-                    {/* Page header */}
-                    <div className="mb-10 opacity-0 animate-[fadeSlideUp_0.6s_ease_forwards]">
-                        <h1 className="mb-2 text-3xl font-light text-gray-900">Összes teszt</h1>
-                        <p className="text-gray-500">
-                            Összesen <span className="font-medium text-gray-900">{analyses.length}</span> elemzés
-                        </p>
-                    </div>
-
-                    {/* Empty state */}
-                    {analyses.length === 0 ? (
-                        <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-16 text-center opacity-0 animate-[fadeSlideUp_0.6s_ease_0.1s_forwards]">
-                            <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-gray-100">
-                                <FileSearch02 className="size-8 text-gray-400" />
-                            </div>
-                            <h2 className="mb-2 text-xl font-light text-gray-900">Még nincs elemzés</h2>
-                            <p className="mb-8 text-gray-500">Az elemzések itt fognak megjelenni.</p>
-                            <Link href="/teszt">
-                                <button className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-all hover:bg-gray-800">
-                                    Új teszt indítása
-                                </button>
-                            </Link>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {analyses.map((analysis, index) => {
-                                const levelInfo = getTestLevelLabel(analysis.test_level, analysis.result.type);
-                                const displayScore = getDisplayScore(analysis.result);
-                                const displayRating = getDisplayRating(analysis.result);
-                                const isRebranding = analysis.result.type === "rebranding";
-
-                                return (
-                                    <div
-                                        key={analysis.id}
-                                        className="group flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 transition-all duration-300 hover:border-gray-200 hover:shadow-sm opacity-0 animate-[fadeSlideUp_0.5s_ease_forwards]"
-                                        style={{ animationDelay: `${0.1 + index * 0.05}s` }}
-                                    >
-                                        {/* Logo thumbnail */}
-                                        <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
-                                            <img
-                                                src={`data:image/png;base64,${analysis.logo_base64}`}
-                                                alt="Logo"
-                                                className="max-h-full max-w-full object-contain p-2"
-                                            />
-                                        </div>
-
-                                        {/* Info */}
-                                        <div className="min-w-0 flex-1">
-                                            <div className="mb-1 flex items-center gap-2">
-                                                {/* Score */}
-                                                <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${getScoreStyles(displayScore)}`}>
-                                                    {isRebranding ? `${analysis.result.oldLogoAnalysis?.osszpontszam || 0} → ${displayScore}` : `${displayScore}/100`}
-                                                </span>
-                                                {/* Test level */}
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${levelInfo.style}`}>
-                                                    {levelInfo.label}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm text-gray-400">
-                                                <Calendar className="size-3.5" />
-                                                <span>{formatDate(analysis.created_at)}</span>
-                                                <span className="text-gray-300">•</span>
-                                                <span>{displayRating}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex shrink-0 items-center gap-2">
-                                            {/* Copy JSON link */}
-                                            <button
-                                                onClick={() => handleCopyJsonLink(analysis.id)}
-                                                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-900"
-                                            >
-                                                {copiedId === analysis.id ? (
-                                                    <>
-                                                        <Check className="size-4 text-emerald-500" />
-                                                        <span className="text-emerald-600">Másolva</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Copy01 className="size-4" />
-                                                        <span>JSON</span>
-                                                    </>
-                                                )}
-                                            </button>
-
-                                            {/* Open */}
-                                            <Link href={getResultUrl(analysis)}>
-                                                <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:shadow-sm">
-                                                    <LinkExternal01 className="size-4" />
-                                                    Megnyitás
-                                                </button>
-                                            </Link>
-
-                                            {/* Delete */}
-                                            <button
-                                                onClick={() => handleDelete(analysis.id)}
-                                                disabled={deleting === analysis.id}
-                                                className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 transition-all hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                                            >
-                                                <Trash01 className="size-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Global animations */}
-            <style jsx global>{`
-                @keyframes fadeSlideUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(20px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-            `}</style>
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
         </div>
+      </AppLayout>
     );
+  }
+
+  if (!isAdmin) return null;
+
+  // 2FA gate
+  if (twoFAState !== 'verified') {
+    return (
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 max-w-sm w-full mx-4">
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Admin hitelesítés</h1>
+
+            {twoFAState === 'checking' && (
+              <div className="flex items-center gap-3 text-gray-500">
+                <div className="animate-spin h-5 w-5 border-2 border-yellow-400 border-t-transparent rounded-full" />
+                <span>Ellenőrzés...</span>
+              </div>
+            )}
+
+            {twoFAState === 'needs_code' && (
+              <div>
+                <p className="text-gray-600 mb-4 text-sm">
+                  A biztonságod érdekében egy egyszer használatos kódot küldünk az email címedre.
+                </p>
+                <button
+                  onClick={send2FACode}
+                  disabled={twoFASending}
+                  className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {twoFASending ? 'Küldés...' : 'Kód küldése emailben'}
+                </button>
+              </div>
+            )}
+
+            {twoFAState === 'entering' && (
+              <div>
+                <p className="text-gray-600 mb-4 text-sm">
+                  Írd be az emailben kapott 6 jegyű kódot.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={twoFACode}
+                  onChange={e => setTwoFACode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  className="w-full px-4 py-3 text-center text-2xl tracking-[0.5em] border border-gray-300 rounded-lg mb-3 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && verify2FACode()}
+                />
+                <label className="flex items-center gap-2 mb-4 text-sm text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={trustBrowser}
+                    onChange={e => setTrustBrowser(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Böngésző megjegyzése 30 napra
+                </label>
+                <button
+                  onClick={verify2FACode}
+                  disabled={twoFASending || twoFACode.length !== 6}
+                  className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {twoFASending ? 'Ellenőrzés...' : 'Ellenőrzés'}
+                </button>
+                <button
+                  onClick={send2FACode}
+                  disabled={twoFASending}
+                  className="w-full mt-2 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  Új kód küldése
+                </button>
+              </div>
+            )}
+
+            {twoFAError && (
+              <p className="mt-3 text-sm text-red-600">{twoFAError}</p>
+            )}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const TABS: { key: Tab; label: string; badge?: number }[] = [
+    { key: 'dashboard', label: 'Statisztikák' },
+    { key: 'pending', label: 'Jóváhagyás', badge: pendingItems.length },
+    { key: 'all', label: 'Összes elemzés' },
+    { key: 'users', label: 'Felhasználók', badge: users.length },
+  ];
+
+  return (
+    <AppLayout>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Admin Panel</h1>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mb-8 border-b border-gray-200">
+            {TABS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                  tab === t.key
+                    ? 'border-yellow-400 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+                {t.badge !== undefined && t.badge > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
+                    {t.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Dashboard tab */}
+          {tab === 'dashboard' && stats && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[
+                { label: 'Összes elemzés', value: stats.totalAnalyses, color: 'bg-blue-50 text-blue-700' },
+                { label: 'Jóváhagyásra vár', value: stats.pendingApprovals, color: 'bg-yellow-50 text-yellow-700' },
+                { label: 'Publikus', value: stats.publicAnalyses, color: 'bg-green-50 text-green-700' },
+                { label: 'Fizetős', value: stats.paidAnalyses, color: 'bg-purple-50 text-purple-700' },
+                { label: 'Felhasználók', value: stats.totalUsers, color: 'bg-gray-100 text-gray-700' },
+              ].map(stat => (
+                <div key={stat.label} className={`rounded-xl p-5 ${stat.color}`}>
+                  <div className="text-3xl font-bold">{stat.value}</div>
+                  <div className="text-sm mt-1 opacity-80">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pending tab */}
+          {tab === 'pending' && (
+            <div>
+              {pendingItems.length === 0 ? (
+                <div className="bg-white rounded-xl p-12 text-center">
+                  <p className="text-gray-500 text-lg">Nincs jóváhagyásra váró elemzés</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingItems.map(item => (
+                    <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5">
+                      <div className="flex items-center gap-4">
+                        {item.logo_base64 && (
+                          <div className="w-16 h-16 bg-gray-50 rounded-lg flex items-center justify-center p-2 flex-shrink-0">
+                            <img
+                              src={`data:image/png;base64,${item.logo_base64}`}
+                              alt={item.logo_name}
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900">{item.logo_name}</h3>
+                          <p className="text-sm text-gray-500">
+                            {item.creator_name} &bull; {CATEGORIES[item.category] || item.category} &bull; {item.tier}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {new Date(item.created_at).toLocaleDateString('hu-HU')}
+                            {item.result?.osszpontszam && ` \u2022 ${item.result.osszpontszam}/100`}
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleAction('approve', item.id)}
+                            disabled={actionLoading === item.id}
+                            className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            Jóváhagyás
+                          </button>
+                          <button
+                            onClick={() => {
+                              const reason = prompt('Elutasítás oka (opcionális):');
+                              if (reason !== null) handleAction('reject', item.id, reason || undefined);
+                            }}
+                            disabled={actionLoading === item.id}
+                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            Elutasítás
+                          </button>
+                          <button
+                            onClick={() => handleAction('set_weekly_winner', item.id)}
+                            disabled={actionLoading === item.id}
+                            className="px-3 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                            title="Hét logója"
+                          >
+                            🏆
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* All analyses tab */}
+          {tab === 'all' && (
+            <div>
+              {allItems.length === 0 ? (
+                <div className="bg-white rounded-xl p-12 text-center">
+                  <p className="text-gray-500 text-lg">Nincs elemzés</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Logo</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Kategória</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Tier</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Státusz</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Pont</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Dátum</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Műveletek</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allItems.map(item => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {item.is_weekly_winner && <span>🏆</span>}
+                              <span className="font-medium text-gray-900 truncate max-w-[150px]">{item.logo_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{CATEGORIES[item.category] || item.category}</td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">{item.tier}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {item.visibility === 'public' && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">Publikus</span>}
+                            {item.visibility === 'pending_approval' && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs">Váró</span>}
+                            {item.visibility === 'rejected' && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">Elutasítva</span>}
+                            {item.visibility === 'private' && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">Zárt</span>}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            {item.result?.osszpontszam || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {new Date(item.created_at).toLocaleDateString('hu-HU')}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex gap-1 justify-end">
+                              {item.visibility === 'pending_approval' && (
+                                <>
+                                  <button
+                                    onClick={() => handleAction('approve', item.id)}
+                                    disabled={actionLoading === item.id}
+                                    className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={() => handleAction('reject', item.id)}
+                                    disabled={actionLoading === item.id}
+                                    className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    ✗
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleAction('set_weekly_winner', item.id)}
+                                disabled={actionLoading === item.id}
+                                className="px-2 py-1 text-xs bg-yellow-50 text-yellow-700 rounded hover:bg-yellow-100 disabled:opacity-50 cursor-pointer"
+                                title="Hét logója"
+                              >
+                                🏆
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Users tab */}
+          {tab === 'users' && (
+            <div>
+              {users.length === 0 ? (
+                <div className="bg-white rounded-xl p-12 text-center">
+                  <p className="text-gray-500 text-lg">Nincs felhasználó</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Név</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Email</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Szerep</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Email ok</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Elemzések</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Fizetős</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Regisztrált</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {users.map(u => (
+                        <tr key={u.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            {u.display_name || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{u.email || '-'}</td>
+                          <td className="px-4 py-3">
+                            {u.is_admin ? (
+                              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">Admin</span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">User</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {u.is_email_verified ? (
+                              <span className="text-green-600 text-xs">Igen</span>
+                            ) : (
+                              <span className="text-red-500 text-xs">Nem</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-gray-900">
+                            {u.analysisCount}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {u.paidCount > 0 ? (
+                              <span className="text-purple-700 font-medium">{u.paidCount}</span>
+                            ) : (
+                              <span className="text-gray-400">0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {new Date(u.created_at).toLocaleDateString('hu-HU')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </AppLayout>
+  );
 }

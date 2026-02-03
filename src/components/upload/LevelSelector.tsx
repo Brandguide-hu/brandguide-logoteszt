@@ -37,7 +37,7 @@ export function LevelSelector({ selected, onChange }: LevelSelectorProps) {
                     key={level.id}
                     onClick={() => onChange(level.id)}
                     className={cx(
-                        "relative text-left p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-md",
+                        "relative text-left p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-md cursor-pointer",
                         selected === level.id
                             ? "border-brand-500 bg-brand-50"
                             : "border-secondary bg-primary hover:border-tertiary"

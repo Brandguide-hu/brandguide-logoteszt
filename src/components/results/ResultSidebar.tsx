@@ -7,9 +7,10 @@ interface ResultSidebarProps {
     logoUrl: string | null;
     score: number;
     rating: string;
+    showLogo?: boolean;
 }
 
-export function ResultSidebar({ logoUrl, score, rating }: ResultSidebarProps) {
+export function ResultSidebar({ logoUrl, score, rating, showLogo = false }: ResultSidebarProps) {
     const [copied, setCopied] = useState(false);
 
     const getShareUrl = () => {
@@ -48,25 +49,6 @@ export function ResultSidebar({ logoUrl, score, rating }: ResultSidebarProps) {
 
     return (
         <aside className="sticky top-8 space-y-6">
-            {/* Logo preview */}
-            {logoUrl && (
-                <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                    <div className="mb-4 flex items-center justify-center rounded-xl bg-gray-50 p-6">
-                        <img
-                            src={logoUrl}
-                            alt="Elemzett logó"
-                            className="max-h-24 max-w-full object-contain"
-                        />
-                    </div>
-                    <div className="text-center">
-                        <div className="text-3xl font-bold text-gray-900">{score}<span className="text-lg font-normal text-gray-400">/100</span></div>
-                        <div className="mt-1 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-                            {rating}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Share section */}
             <div className="rounded-2xl border border-gray-200 bg-white p-6">
                 <div className="mb-4 flex items-center gap-2">
@@ -125,6 +107,29 @@ export function ResultSidebar({ logoUrl, score, rating }: ResultSidebarProps) {
                     <p className="text-sm text-gray-400">Banner helye<br />(admin-ból tölthető)</p>
                 </div>
             </div>
+
+            {/* Logo preview - appears when hero logo scrolls out of view */}
+            {logoUrl && (
+                <div
+                    className={`rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300 ${
+                        showLogo ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
+                    }`}
+                >
+                    <div className="mb-4 flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 aspect-square p-6">
+                        <img
+                            src={logoUrl}
+                            alt="Elemzett logó"
+                            className="max-h-full max-w-full object-contain"
+                        />
+                    </div>
+                    <div className="text-center">
+                        <div className="text-3xl font-bold text-gray-900">{score}<span className="text-lg font-normal text-gray-400">/100</span></div>
+                        <div className="mt-1 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                            {rating}
+                        </div>
+                    </div>
+                </div>
+            )}
         </aside>
     );
 }

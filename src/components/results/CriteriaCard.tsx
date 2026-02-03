@@ -25,7 +25,7 @@ export function CriteriaCard({ criteria, score }: CriteriaCardProps) {
         <div className="bg-primary border border-secondary rounded-xl overflow-hidden">
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full p-4 flex items-center gap-4 hover:bg-secondary transition-colors"
+                className="w-full p-4 flex items-center gap-4 hover:bg-secondary transition-colors cursor-pointer"
             >
                 <span className="text-2xl">{criteria.icon}</span>
                 <div className="flex-1 text-left">

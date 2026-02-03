@@ -1,358 +1,156 @@
 /**
- * Logo Analyzer API V3
+ * Logo Analyzer API V4
  *
  * Architektúra:
  * 1. Claude Vision - "Vakvezető Designer" leírás (~3500 kar)
- * 2. brandguideAI Hívás 1 - Pontozás (7 szempont)
- * 3. brandguideAI Hívás 2 - Összefoglaló + Erősségek + Fejlesztendő
- * 4. brandguideAI Hívás 3 - Szöveges elemzések (színek, tipográfia, vizuális nyelv)
+ * 2. kb-extract API - Egyetlen hívás structured output-tal (scoring + summary + details)
  *
- * Összesen: 4 API hívás
+ * Összesen: 2 API hívás (korábban 4)
  */
 
 import { NextRequest } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
-import { AnalysisResult, ColorAnalysis, TypographyAnalysis, VisualLanguageAnalysis, Rating } from '@/types';
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { AnalysisResult, ColorAnalysis, TypographyAnalysis, VisualLanguageAnalysis, CriteriaScore } from '@/types';
 import {
   analyzeImageWithVision,
-  queryBrandguideAI,
+  queryKBExtract,
   BrandguideAPIError,
-  BrandguideResponse,
-  parseJSONResponse,
+  KBExtractSource,
   ERROR_MESSAGES,
 } from '@/lib/brandguide-api';
-import { buildScoringQuery, buildSummaryQuery, buildDetailsQuery, getRatingFromScore } from '@/lib/prompts-v2';
+import { buildFullAnalysisQuery, KB_EXTRACT_FULL_SCHEMA, getRatingFromScore } from '@/lib/prompts-v2';
 
 // ============================================================================
-// TYPES
+// TYPES - kb-extract structured output
 // ============================================================================
 
-// Response from scoring call (new structure with famous logo detection)
-interface ScoringResponse {
-  hiresLogo?: {
-    pipiIsmert: boolean;
-    pipiMarka: string | null;
-    pipiTervezo: string | null;
-    pipiKontextus: string | null;
-  };
-  pipiOsszpipiPontpipiSzam?: number;
-  pipiLogopipitipus?: 'klasszikus_logo' | 'kampany_badge' | 'illusztracio_jellegu';
-  pipiOsszepipiTekintes?: string;
-  szempontok: {
-    megkulonboztethetoseg: CriteriaScoreResponse;
-    egyszeruseg: CriteriaScoreResponse;
-    alkalmazhatosag: CriteriaScoreResponse;
-    emlekezetesseg: CriteriaScoreResponse;
-    idotallosag: CriteriaScoreResponse;
-    univerzalitas: CriteriaScoreResponse;
-    lathatosag: CriteriaScoreResponse;
-  };
-}
-
-// Response from summary call
-interface SummaryResponse {
-  osszegzes: string;
-  erossegek: string[];
-  fejlesztendo: string[];
-}
-
-// Combined result
-interface CombinedScoringResult {
-  osszpontszam: number;
-  minosites: Rating;
-  szempontok: ScoringResponse['szempontok'];
-  osszegzes: string;
-  erossegek: string[];
-  fejlesztendo: string[];
-}
-
-interface CriteriaScoreResponse {
+// Raw API response type - szempontok as array (to keep schema grammar small)
+interface KBExtractSzempontItem {
+  nev: string;
   pont: number;
   maxPont: number;
   indoklas: string;
   javaslatok: string[];
 }
 
-interface DetailsResponse {
-  szinek: ColorAnalysis;
-  tipografia: TypographyAnalysis;
-  vizualisNyelv: VisualLanguageAnalysis;
+interface KBExtractAnalysisDataRaw {
+  scoring: {
+    osszpontszam: number;
+    logotipus: 'klasszikus_logo' | 'kampany_badge' | 'illusztracio_jellegu';
+    hiresLogo: {
+      ismert: boolean;
+      marka: string;
+      tervezo: string;
+      kontextus: string;
+    };
+    szempontok: KBExtractSzempontItem[];
+  };
+  summary: {
+    osszegzes: string;
+    erossegek: string[];
+    fejlesztendo: string[];
+  };
+  details: {
+    szinek: ColorAnalysis;
+    tipografia: TypographyAnalysis;
+    vizualisNyelv: VisualLanguageAnalysis;
+  };
+}
+
+// Normalized type - szempontok as named object (used by the rest of the app)
+interface SzempontokMap {
+  megkulonboztethetoseg: CriteriaScore;
+  egyszeruseg: CriteriaScore;
+  alkalmazhatosag: CriteriaScore;
+  emlekezetesseg: CriteriaScore;
+  idotallosag: CriteriaScore;
+  univerzalitas: CriteriaScore;
+  lathatosag: CriteriaScore;
 }
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
-/**
- * Calculate total score from criteria
- */
-function calculateTotalScore(szempontok: ScoringResponse['szempontok']): number {
-  return (
-    (szempontok.megkulonboztethetoseg?.pont || 0) +
-    (szempontok.egyszeruseg?.pont || 0) +
-    (szempontok.alkalmazhatosag?.pont || 0) +
-    (szempontok.emlekezetesseg?.pont || 0) +
-    (szempontok.idotallosag?.pont || 0) +
-    (szempontok.univerzalitas?.pont || 0) +
-    (szempontok.lathatosag?.pont || 0)
-  );
-}
+const SZEMPONT_ORDER: (keyof SzempontokMap)[] = [
+  'megkulonboztethetoseg', 'egyszeruseg', 'alkalmazhatosag',
+  'emlekezetesseg', 'idotallosag', 'univerzalitas', 'lathatosag'
+];
+
+const MAX_VALUES: Record<string, number> = {
+  megkulonboztethetoseg: 20,
+  egyszeruseg: 18,
+  alkalmazhatosag: 15,
+  emlekezetesseg: 15,
+  idotallosag: 12,
+  univerzalitas: 10,
+  lathatosag: 10,
+};
 
 /**
- * Normalize criteria key names to handle common variations
- * Uses accent-stripping for consistent matching
+ * Convert szempontok array from kb-extract to named object format
  */
-function normalizeCriteriaKey(key: string): string {
-  // First normalize: lowercase and strip accents
-  const stripped = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function szempontokArrayToMap(items: KBExtractSzempontItem[]): SzempontokMap {
+  const map = {} as SzempontokMap;
 
-  // Map accent-stripped variations to canonical names
-  const keyMappings: Record<string, string> = {
-    // All mappings use accent-stripped keys
-    'megkulonboztethetoseg': 'megkulonboztethetoseg',
-    'megkulonboztetheseg': 'megkulonboztethetoseg', // typo
-    'egyszeruseg': 'egyszeruseg',
-    'egyszuruseg': 'egyszeruseg', // typo
-    'alkalmazhatosag': 'alkalmazhatosag',
-    'emlekezetesseg': 'emlekezetesseg',
-    'emlekezetseg': 'emlekezetesseg', // typo - hiányzó 'e'
-    'emleketesseg': 'emlekezetesseg', // typo variant
-    'idotallosag': 'idotallosag',
-    'idotallossag': 'idotallosag', // dupla s typo
-    'univerzalitas': 'univerzalitas',
-    'lathatosag': 'lathatosag',
-    'lathatasag': 'lathatosag', // typo - extra 'a'
-  };
-
-  return keyMappings[stripped] || stripped;
-}
-
-/**
- * Find a value in criteria by checking accent-stripped key variations
- */
-function findCriteriaValue(criteria: Record<string, unknown> | undefined, targetKey: string): unknown {
-  if (!criteria) return undefined;
-  // First try exact match
-  if (criteria[targetKey] !== undefined) return criteria[targetKey];
-  // Then search by accent-stripped key
-  const strippedTarget = targetKey.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  for (const key of Object.keys(criteria)) {
-    const strippedKey = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (strippedKey === strippedTarget) {
-      return criteria[key];
+  // First try to match by nev field
+  for (const item of items) {
+    const key = item.nev as keyof SzempontokMap;
+    if (SZEMPONT_ORDER.includes(key)) {
+      map[key] = {
+        pont: item.pont,
+        maxPont: item.maxPont,
+        indoklas: item.indoklas,
+        javaslatok: Array.isArray(item.javaslatok) ? item.javaslatok : [],
+      };
     }
   }
-  return undefined;
-}
 
-/**
- * Clamp and validate a single criteria score
- * Handles variations from brandguideAI:
- * - pont vs pontszam (score key variations, with/without accents)
- * - indoklas/indoklás (string or array)
- * - javaslatok/javaslatok (array)
- */
-function clampCriteria(criteria: Record<string, unknown> | undefined, maxPont: number): CriteriaScoreResponse {
-  // Handle pont vs pontszam variation (with/without accents)
-  const pontValue = findCriteriaValue(criteria, 'pont') ?? findCriteriaValue(criteria, 'pontszam');
-  const rawPont = typeof pontValue === 'number' ? pontValue : 0;
-  const pont = Math.min(Math.max(0, rawPont), maxPont); // Clamp between 0 and maxPont
-
-  // Handle indoklas variations: string or array (with/without accents)
-  let indoklas = '';
-  const indoklasValue = findCriteriaValue(criteria, 'indoklas') ?? findCriteriaValue(criteria, 'indoklasok');
-  if (typeof indoklasValue === 'string') {
-    indoklas = indoklasValue;
-  } else if (Array.isArray(indoklasValue)) {
-    indoklas = (indoklasValue as string[]).join(' ');
+  // Fallback: if some are missing, try positional mapping
+  for (let i = 0; i < SZEMPONT_ORDER.length; i++) {
+    const key = SZEMPONT_ORDER[i];
+    if (!map[key] && items[i]) {
+      console.log(`[VALIDATE] Positional fallback for ${key} (got nev: "${items[i].nev}")`);
+      map[key] = {
+        pont: items[i].pont,
+        maxPont: items[i].maxPont,
+        indoklas: items[i].indoklas,
+        javaslatok: Array.isArray(items[i].javaslatok) ? items[i].javaslatok : [],
+      };
+    }
   }
 
-  // Handle javaslatok (with/without accents)
-  const javaslatokValue = findCriteriaValue(criteria, 'javaslatok');
-  const javaslatok = Array.isArray(javaslatokValue) ? javaslatokValue as string[] : [];
-
-  return {
-    pont,
-    maxPont,
-    indoklas,
-    javaslatok,
-  };
+  return map;
 }
 
 /**
- * Strip accents from a string for comparison
+ * Calculate total score from criteria (always recalculate, don't trust AI sum)
  */
-function stripAccents(str: string): string {
-  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function calculateTotalScore(szempontok: SzempontokMap): number {
+  return SZEMPONT_ORDER.reduce((sum, key) => sum + (szempontok[key]?.pont || 0), 0);
 }
 
 /**
- * Find a wrapper key in data by checking accent-stripped versions
- * Returns the actual key if found, or null
+ * Clamp criteria scores to their max values (safety net)
  */
-function findWrapperKey(data: Record<string, unknown>): string | null {
-  // Known wrapper patterns (accent-stripped)
-  const wrapperPatterns = [
-    'brandguide_ertekeles',
-    'logo_ertekeles',
-    'ertekeles',
-  ];
-
-  for (const key of Object.keys(data)) {
-    const stripped = stripAccents(key.replace(/[_\s-]/g, '_'));
-    for (const pattern of wrapperPatterns) {
-      if (stripped.includes(pattern) && typeof data[key] === 'object' && data[key] !== null) {
-        return key;
+function clampSzempontok(szempontok: SzempontokMap): SzempontokMap {
+  const clamped = { ...szempontok };
+  for (const [key, maxPont] of Object.entries(MAX_VALUES)) {
+    const k = key as keyof SzempontokMap;
+    if (clamped[k]) {
+      const originalPont = clamped[k].pont;
+      clamped[k] = {
+        ...clamped[k],
+        pont: Math.min(Math.max(0, clamped[k].pont), maxPont),
+        maxPont,
+        javaslatok: Array.isArray(clamped[k].javaslatok) ? clamped[k].javaslatok : [],
+      };
+      if (originalPont !== clamped[k].pont) {
+        console.log(`[VALIDATE] Clamped ${key}: ${originalPont} -> ${clamped[k].pont}`);
       }
     }
   }
-  return null;
-}
-
-/**
- * Validate scoring data (full response including new fields)
- * Handles multiple key variations from brandguideAI:
- * - szempontok vs ertekeles (with/without accents)
- * - osszpontszam vs osszPontszam vs pipiOsszpipiPontpipiSzam
- * - nested structure like brandguide_ertekeles.szempontok or logó_értékelés.szempontok
- */
-function validateScoringData(data: Record<string, unknown>): ScoringResponse {
-  // Handle nested wrapper structures - brandguideAI sometimes wraps everything
-  // Use dynamic wrapper detection to handle any accent variation
-  let effectiveData = data;
-  const wrapperKey = findWrapperKey(data);
-  if (wrapperKey) {
-    console.log(`[VALIDATE] Found nested wrapper structure: "${wrapperKey}", unwrapping...`);
-    effectiveData = data[wrapperKey] as Record<string, unknown>;
-  }
-
-  // brandguideAI uses varying keys for criteria container:
-  // 'szempontok', 'ertekeles'/'értékelés', 'kriteriumok'/'kritériumok', 'reszletes_ertekeles'/'részletes_értékelés'
-  // Find the actual key by checking accent-stripped versions (with underscore handling)
-  const szempontokPatterns = ['szempontok', 'ertekeles', 'kriteriumok', 'reszletes_ertekeles'];
-  let rawSzempontok: Record<string, unknown> = {};
-  let szempontokSource = 'empty';
-
-  // Debug: log all keys in effectiveData
-  console.log('[VALIDATE] effectiveData keys:', Object.keys(effectiveData).join(', '));
-
-  for (const key of Object.keys(effectiveData)) {
-    // Strip accents but keep underscores
-    const stripped = stripAccents(key);
-    console.log(`[VALIDATE] Checking key "${key}" -> stripped "${stripped}"`);
-    if (szempontokPatterns.includes(stripped)) {
-      if (typeof effectiveData[key] === 'object' && effectiveData[key] !== null) {
-        rawSzempontok = effectiveData[key] as Record<string, unknown>;
-        szempontokSource = key;
-        console.log(`[VALIDATE] MATCH! Found szempontok in key "${key}"`);
-        break;
-      }
-    }
-  }
-  console.log('[VALIDATE] Using szempontok source:', szempontokSource);
-
-  // Also handle different osszpontszam key variations
-  const osszpontszam = (effectiveData.pipiOsszpipiPontpipiSzam || effectiveData.osszpontszam || effectiveData.osszPontszam) as number | undefined;
-  console.log('[VALIDATE] Osszpontszam:', osszpontszam);
-
-  // Extract hiresLogo if present (from effectiveData after unwrapping)
-  const hiresLogoRaw = effectiveData.hiresLogo as Record<string, unknown> | undefined;
-
-  const normalizedSzempontok: Record<string, Record<string, unknown>> = {};
-
-  for (const [key, value] of Object.entries(rawSzempontok)) {
-    const normalizedKey = normalizeCriteriaKey(key);
-    if (value && typeof value === 'object') {
-      normalizedSzempontok[normalizedKey] = value as Record<string, unknown>;
-    }
-  }
-
-  // Debug: log which criteria are present/missing
-  const expectedKeys = ['megkulonboztethetoseg', 'egyszeruseg', 'alkalmazhatosag', 'emlekezetesseg', 'idotallosag', 'univerzalitas', 'lathatosag'];
-  const presentKeys = Object.keys(normalizedSzempontok);
-  const missingKeys = expectedKeys.filter(k => !presentKeys.includes(k));
-
-  if (missingKeys.length > 0) {
-    console.log('[VALIDATE] Missing criteria after normalization:', missingKeys.join(', '));
-    console.log('[VALIDATE] Original keys:', Object.keys(rawSzempontok).join(', '));
-    console.log('[VALIDATE] Normalized keys:', presentKeys.join(', '));
-    console.log('[VALIDATE] Raw szempontok:', JSON.stringify(rawSzempontok).slice(0, 800));
-  }
-
-  // Build validated szempontok with clamped scores
-  const szempontok = {
-    megkulonboztethetoseg: clampCriteria(normalizedSzempontok.megkulonboztethetoseg, 20),
-    egyszeruseg: clampCriteria(normalizedSzempontok.egyszeruseg, 18),
-    alkalmazhatosag: clampCriteria(normalizedSzempontok.alkalmazhatosag, 15),
-    emlekezetesseg: clampCriteria(normalizedSzempontok.emlekezetesseg, 15),
-    idotallosag: clampCriteria(normalizedSzempontok.idotallosag, 12),
-    univerzalitas: clampCriteria(normalizedSzempontok.univerzalitas, 10),
-    lathatosag: clampCriteria(normalizedSzempontok.lathatosag, 10),
-  };
-
-  // Log if any scores were clamped
-  const clampedScores: string[] = [];
-  const lathatosagPont = normalizedSzempontok.lathatosag?.pont as number | undefined;
-  const idotallosagPont = normalizedSzempontok.idotallosag?.pont as number | undefined;
-  if (lathatosagPont && lathatosagPont > 10) {
-    clampedScores.push(`lathatosag: ${lathatosagPont} -> 10`);
-  }
-  if (idotallosagPont && idotallosagPont > 12) {
-    clampedScores.push(`idotallosag: ${idotallosagPont} -> 12`);
-  }
-  if (clampedScores.length > 0) {
-    console.log('[VALIDATE] Clamped scores:', clampedScores.join(', '));
-  }
-
-  return {
-    hiresLogo: hiresLogoRaw ? {
-      pipiIsmert: (hiresLogoRaw.pipiIsmert as boolean) ?? false,
-      pipiMarka: (hiresLogoRaw.pipiMarka as string) ?? null,
-      pipiTervezo: (hiresLogoRaw.pipiTervezo as string) ?? null,
-      pipiKontextus: (hiresLogoRaw.pipiKontextus as string) ?? null,
-    } : undefined,
-    // Use normalized osszpontszam that handles multiple key variations
-    pipiOsszpipiPontpipiSzam: osszpontszam,
-    pipiLogopipitipus: (effectiveData.pipiLogopipitipus || effectiveData.logotipus) as ScoringResponse['pipiLogopipitipus'],
-    pipiOsszepipiTekintes: effectiveData.pipiOsszepipiTekintes as string | undefined,
-    szempontok,
-  };
-}
-
-/**
- * Validate summary data
- */
-function validateSummaryData(data: Partial<SummaryResponse>): SummaryResponse {
-  return {
-    osszegzes: data.osszegzes || '',
-    erossegek: Array.isArray(data.erossegek) ? data.erossegek.filter(e => e && e.length > 0) : [],
-    fejlesztendo: Array.isArray(data.fejlesztendo) ? data.fejlesztendo.filter(f => f && f.length > 0) : [],
-  };
-}
-
-/**
- * Validate and fix details data
- */
-function validateDetailsData(data: Partial<DetailsResponse>): DetailsResponse {
-  return {
-    szinek: {
-      harmonia: data.szinek?.harmonia || '',
-      pszichologia: data.szinek?.pszichologia || '',
-      technikai: data.szinek?.technikai || '',
-      javaslatok: Array.isArray(data.szinek?.javaslatok) ? data.szinek.javaslatok : [],
-    },
-    tipografia: {
-      karakter: data.tipografia?.karakter || '',
-      olvashatosag: data.tipografia?.olvashatosag || '',
-      javaslatok: Array.isArray(data.tipografia?.javaslatok) ? data.tipografia.javaslatok : [],
-    },
-    vizualisNyelv: {
-      formak: data.vizualisNyelv?.formak || '',
-      elemek: data.vizualisNyelv?.elemek || '',
-      stilusEgyseg: data.vizualisNyelv?.stilusEgyseg || '',
-      javaslatok: Array.isArray(data.vizualisNyelv?.javaslatok) ? data.vizualisNyelv.javaslatok : [],
-    },
-  };
+  return clamped;
 }
 
 // ============================================================================
@@ -390,73 +188,103 @@ export async function POST(request: NextRequest) {
     try {
       await sendEvent('status', { message: 'Elemzés indítása...', phase: 'start' });
 
-      let scoringResponse: BrandguideResponse;
       let visionDescription: string;
 
       // ========================================
       // STEP 1: Claude Vision - "Vakvezető Designer"
       // ========================================
-      console.log('[ANALYZE V2] Step 1: Claude Vision (Vakvezető Designer)...');
+      console.log('[ANALYZE V4] Step 1: Claude Vision (Vakvezető Designer)...');
       await sendEvent('status', { message: 'Kép feldolgozása...', phase: 'vision' });
 
       try {
         visionDescription = await analyzeImageWithVision(logo, mediaType, colors, fontName);
-        console.log('[ANALYZE V2] Vision description length:', visionDescription.length);
+        console.log('[ANALYZE V4] Vision description length:', visionDescription.length);
+        await sendEvent('debug', { message: `[VISION] Leírás kész: ${visionDescription.length} kar` });
       } catch (visionError: unknown) {
         const errorMessage = visionError instanceof Error ? visionError.message : String(visionError);
-        console.error('[ANALYZE V2] Vision error:', errorMessage);
+        console.error('[ANALYZE V4] Vision error:', errorMessage);
         throw new Error(`Claude Vision hiba: ${errorMessage}`);
       }
 
       // ========================================
-      // STEP 2: brandguideAI - Pontozás (szempontok)
+      // STEP 2: kb-extract - Pontozás + Összefoglaló + Részletek (1 hívás)
       // ========================================
-      console.log('[ANALYZE V3] Step 2: brandguideAI - Pontozás...');
-      await sendEvent('status', { message: 'Pontozás (1/3)...', phase: 'scoring' });
+      console.log('[ANALYZE V4] Step 2: kb-extract - Teljes elemzés...');
+      await sendEvent('status', { message: 'Elemzés folyamatban...', phase: 'analysis' });
 
-      let scoringData: ScoringResponse;
+      let rawData: KBExtractAnalysisDataRaw;
+      let szempontokMap: SzempontokMap;
+      let sources: KBExtractSource[] = [];
+
       try {
-        const scoringQuery = buildScoringQuery(visionDescription);
-        console.log('[ANALYZE V3] Scoring query length:', scoringQuery.length);
-        await sendEvent('debug', { message: `[SCORING] Query küldése: ${scoringQuery.length} kar` });
+        const analysisQuery = buildFullAnalysisQuery();
+        console.log('[ANALYZE V4] Analysis query length:', analysisQuery.length);
+        await sendEvent('debug', { message: `[KB-EXTRACT] Query küldése: ${analysisQuery.length} kar` });
 
-        scoringResponse = await queryBrandguideAI(scoringQuery);
-        console.log('[ANALYZE V3] Scoring response length:', scoringResponse.answer.length);
-        console.log('[ANALYZE V3] Scoring raw answer first 1000:', scoringResponse.answer.slice(0, 1000));
-        await sendEvent('debug', { message: `[SCORING] Válasz: ${scoringResponse.answer.length} kar` });
-        await sendEvent('debug', { message: `[SCORING] Első 300: ${scoringResponse.answer.slice(0, 300).replace(/\n/g, ' ')}` });
-        await sendEvent('debug', { message: `[SCORING] Utolsó 200: ${scoringResponse.answer.slice(-200).replace(/\n/g, ' ')}` });
-
-        // Parse as Record to capture all keys including variations like 'ertekeles'
-        const rawScoringData = parseJSONResponse<Record<string, unknown>>(
-          scoringResponse.answer,
-          ERROR_MESSAGES.PARSE_ERROR_SCORING
+        const kbResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
+          analysisQuery,
+          visionDescription,
+          KB_EXTRACT_FULL_SCHEMA,
+          'best_effort',
+          { max_sources: 5, language: 'hu' }
         );
-        // Log raw data before validation
-        console.log('[ANALYZE V3] Raw scoring data keys:', Object.keys(rawScoringData));
-        const szempontokOrErtekeles = rawScoringData.szempontok || rawScoringData.ertekeles;
-        console.log('[ANALYZE V3] Raw szempontok/ertekeles:', JSON.stringify(szempontokOrErtekeles || {}).slice(0, 500));
-        await sendEvent('debug', { message: `[SCORING] Raw keys: ${Object.keys(rawScoringData).join(', ')}` });
-        await sendEvent('debug', { message: `[SCORING] Has ertekeles: ${!!rawScoringData.ertekeles}, Has szempontok: ${!!rawScoringData.szempontok}` });
 
-        scoringData = validateScoringData(rawScoringData);
+        rawData = kbResponse.data;
+        sources = kbResponse.sources || [];
 
-        // Log each criterion score after validation
-        const criteriaScores = Object.entries(scoringData.szempontok).map(([key, val]) => `${key}:${val.pont}`).join(', ');
-        await sendEvent('debug', { message: `[SCORING] Validated scores: ${criteriaScores}` });
-        await sendEvent('debug', { message: `[SCORING] JSON parsed OK` });
+        // Convert szempontok array to named object
+        szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
 
-        const osszpontszam = calculateTotalScore(scoringData.szempontok);
-        console.log('[ANALYZE V3] Scoring total:', osszpontszam);
-        await sendEvent('debug', { message: `[SCORING] Összpontszám: ${osszpontszam}` });
-        if (scoringData.pipiOsszpipiPontpipiSzam) {
-          console.log('[ANALYZE V3] AI suggested total:', scoringData.pipiOsszpipiPontpipiSzam);
+        console.log('[ANALYZE V4] KB-Extract response received');
+        console.log('[ANALYZE V4] Tokens used:', kbResponse.meta?.tokens_used);
+        console.log('[ANALYZE V4] AI osszpontszam:', rawData.scoring.osszpontszam);
+        console.log('[ANALYZE V4] Logo type:', rawData.scoring.logotipus);
+        console.log('[ANALYZE V4] Szempontok array length:', rawData.scoring.szempontok?.length);
+
+        // Validate all 7 szempontok are present
+        const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
+        if (missingKeys.length > 0) {
+          console.warn(`[ANALYZE V4] Missing szempontok: ${missingKeys.join(', ')} (got ${rawData.scoring.szempontok?.length || 0}/7)`);
+          await sendEvent('debug', { message: `[KB-EXTRACT] Hiányzó szempontok: ${missingKeys.join(', ')} - újrapróbálás...` });
+
+          // Retry once - the API sometimes returns partial results in best_effort mode
+          const retryResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
+            analysisQuery,
+            visionDescription,
+            KB_EXTRACT_FULL_SCHEMA,
+            'best_effort',
+            { max_sources: 5, language: 'hu' }
+          );
+
+          rawData = retryResponse.data;
+          sources = retryResponse.sources || [];
+          szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
+
+          console.log('[ANALYZE V4] Retry szempontok array length:', rawData.scoring.szempontok?.length);
+
+          const stillMissing = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
+          if (stillMissing.length > 0) {
+            console.error(`[ANALYZE V4] Still missing after retry: ${stillMissing.join(', ')}`);
+            throw new Error(`Hiányos elemzés: ${stillMissing.length} szempont hiányzik (${stillMissing.join(', ')}). Kérlek próbáld újra.`);
+          }
         }
-        if (scoringData.hiresLogo?.pipiIsmert) {
-          console.log('[ANALYZE V3] Famous logo detected:', scoringData.hiresLogo.pipiMarka);
+
+        await sendEvent('debug', { message: `[KB-EXTRACT] Válasz OK, tokens: ${kbResponse.meta?.tokens_used}` });
+        await sendEvent('debug', { message: `[KB-EXTRACT] Trace: ${kbResponse.meta?.trace_id}` });
+
+        if (rawData.scoring.hiresLogo?.ismert) {
+          console.log('[ANALYZE V4] Famous logo detected:', rawData.scoring.hiresLogo.marka);
+          await sendEvent('debug', { message: `[KB-EXTRACT] Híres logó: ${rawData.scoring.hiresLogo.marka}` });
         }
+
+        // Log criteria scores
+        const criteriaScores = Object.entries(szempontokMap)
+          .map(([key, val]) => `${key}:${val.pont}`)
+          .join(', ');
+        await sendEvent('debug', { message: `[KB-EXTRACT] Pontszámok: ${criteriaScores}` });
+
       } catch (error) {
-        await sendEvent('debug', { message: `[SCORING] HIBA: ${error instanceof Error ? error.message : 'ismeretlen'}` });
+        await sendEvent('debug', { message: `[KB-EXTRACT] HIBA: ${error instanceof Error ? error.message : 'ismeretlen'}` });
         if (error instanceof BrandguideAPIError) {
           throw new Error(`brandguideAI hiba: ${error.message}`);
         }
@@ -464,128 +292,75 @@ export async function POST(request: NextRequest) {
       }
 
       // ========================================
-      // STEP 3: brandguideAI - Összefoglaló + Erősségek + Fejlesztendő
+      // STEP 3: Validálás + Összefűzés
       // ========================================
-      console.log('[ANALYZE V3] Step 3: brandguideAI - Összefoglaló...');
-      await sendEvent('status', { message: 'Összefoglaló (2/3)...', phase: 'summary' });
-
-      let summaryData: SummaryResponse;
-      try {
-        // Pass calculated scoring result to summary for consistency
-        // Always use calculated score, not AI suggested (which can be inconsistent)
-        const calculatedOsszpontszam = calculateTotalScore(scoringData.szempontok);
-        const summaryQuery = buildSummaryQuery(visionDescription, {
-          osszpontszam: calculatedOsszpontszam,
-          logoTipus: scoringData.pipiLogopipitipus || 'klasszikus_logo'
-        });
-        console.log('[ANALYZE V3] Summary query length:', summaryQuery.length);
-        await sendEvent('debug', { message: `[SUMMARY] Query küldése: ${summaryQuery.length} kar` });
-
-        const summaryResponse = await queryBrandguideAI(summaryQuery);
-        console.log('[ANALYZE V3] Summary response length:', summaryResponse.answer.length);
-        await sendEvent('debug', { message: `[SUMMARY] Válasz: ${summaryResponse.answer.length} kar` });
-
-        const rawSummaryData = parseJSONResponse<Partial<SummaryResponse>>(
-          summaryResponse.answer,
-          'Nem sikerült feldolgozni az összefoglaló válaszát'
-        );
-        summaryData = validateSummaryData(rawSummaryData);
-        await sendEvent('debug', { message: `[SUMMARY] JSON parsed OK` });
-      } catch (error) {
-        await sendEvent('debug', { message: `[SUMMARY] HIBA: ${error instanceof Error ? error.message : 'ismeretlen'}` });
-        if (error instanceof BrandguideAPIError) {
-          throw new Error(`brandguideAI hiba: ${error.message}`);
-        }
-        throw error;
-      }
-
-      // ========================================
-      // STEP 4: brandguideAI - Szöveges elemzések
-      // ========================================
-      console.log('[ANALYZE V3] Step 4: brandguideAI - Szöveges elemzések...');
-      await sendEvent('status', { message: 'Részletes elemzés (3/3)...', phase: 'details' });
-
-      let detailsData: DetailsResponse;
-      try {
-        const detailsQuery = buildDetailsQuery(visionDescription);
-        console.log('[ANALYZE V3] Details query length:', detailsQuery.length);
-        await sendEvent('debug', { message: `[DETAILS] Query küldése: ${detailsQuery.length} kar` });
-
-        const detailsResponse = await queryBrandguideAI(detailsQuery);
-        console.log('[ANALYZE V3] Details response length:', detailsResponse.answer.length);
-        await sendEvent('debug', { message: `[DETAILS] Válasz: ${detailsResponse.answer.length} kar` });
-
-        const rawDetailsData = parseJSONResponse<Partial<DetailsResponse>>(
-          detailsResponse.answer,
-          ERROR_MESSAGES.PARSE_ERROR_DETAILS
-        );
-        detailsData = validateDetailsData(rawDetailsData);
-        await sendEvent('debug', { message: `[DETAILS] JSON parsed OK` });
-      } catch (error) {
-        await sendEvent('debug', { message: `[DETAILS] HIBA: ${error instanceof Error ? error.message : 'ismeretlen'}` });
-        if (error instanceof BrandguideAPIError) {
-          throw new Error(`brandguideAI hiba: ${error.message}`);
-        }
-        throw error;
-      }
-
-      // ========================================
-      // STEP 5: Összefűzés + Validálás
-      // ========================================
-      console.log('[ANALYZE V3] Step 5: Összefűzés és validálás...');
+      console.log('[ANALYZE V4] Step 3: Validálás...');
       await sendEvent('status', { message: 'Eredmények feldolgozása...', phase: 'processing' });
 
-      // Calculate total score - ALWAYS calculate from criteria for consistency
-      // brandguideAI sometimes returns inconsistent osszpontszam (e.g., says 92 but criteria sum to 100)
-      const calculatedScore = calculateTotalScore(scoringData.szempontok);
-      const aiSuggestedScore = scoringData.pipiOsszpipiPontpipiSzam;
+      // Clamp criteria scores (safety net)
+      const clampedSzempontok = clampSzempontok(szempontokMap);
 
-      // Log if there's a mismatch between AI suggested and calculated
-      if (aiSuggestedScore && Math.abs(aiSuggestedScore - calculatedScore) > 2) {
-        console.log(`[ANALYZE V3] Score mismatch: AI suggested ${aiSuggestedScore}, calculated ${calculatedScore} - using calculated`);
-        await sendEvent('debug', { message: `[SCORING] AI: ${aiSuggestedScore}, Számolt: ${calculatedScore} - számoltat használjuk` });
+      // Calculate total score - ALWAYS from criteria, never trust AI sum
+      const calculatedScore = calculateTotalScore(clampedSzempontok);
+      const aiSuggestedScore = rawData.scoring.osszpontszam;
+
+      if (Math.abs(aiSuggestedScore - calculatedScore) > 2) {
+        console.log(`[ANALYZE V4] Score mismatch: AI suggested ${aiSuggestedScore}, calculated ${calculatedScore} - using calculated`);
+        await sendEvent('debug', { message: `[VALIDATE] AI: ${aiSuggestedScore}, Számolt: ${calculatedScore} - számoltat használjuk` });
       }
 
       const osszpontszam = calculatedScore;
       const minosites = getRatingFromScore(osszpontszam);
 
-      // Build the result object with new fields
+      // Build the result object
       const result: AnalysisResult & {
-        sources?: BrandguideResponse['sources'];
-        hiresLogo?: ScoringResponse['hiresLogo'];
-        logoTipus?: ScoringResponse['pipiLogopipitipus'];
-        aiOsszpipiTekintes?: string;
+        sources?: KBExtractSource[];
+        hiresLogo?: KBExtractAnalysisDataRaw['scoring']['hiresLogo'];
+        logoTipus?: string;
       } = {
         id: '',
         osszpontszam,
         minosites,
-        szempontok: scoringData.szempontok,
-        osszegzes: scoringData.pipiOsszepipiTekintes || summaryData.osszegzes,
-        erossegek: summaryData.erossegek,
-        fejlesztendo: summaryData.fejlesztendo,
-        szinek: detailsData.szinek,
-        tipografia: detailsData.tipografia,
-        vizualisNyelv: detailsData.vizualisNyelv,
+        szempontok: clampedSzempontok,
+        osszegzes: rawData.summary.osszegzes || '',
+        erossegek: Array.isArray(rawData.summary.erossegek) ? rawData.summary.erossegek.filter(e => e && e.length > 0) : [],
+        fejlesztendo: Array.isArray(rawData.summary.fejlesztendo) ? rawData.summary.fejlesztendo.filter(f => f && f.length > 0) : [],
+        szinek: {
+          harmonia: rawData.details.szinek?.harmonia || '',
+          pszichologia: rawData.details.szinek?.pszichologia || '',
+          technikai: rawData.details.szinek?.technikai || '',
+          javaslatok: Array.isArray(rawData.details.szinek?.javaslatok) ? rawData.details.szinek.javaslatok : [],
+        },
+        tipografia: {
+          karakter: rawData.details.tipografia?.karakter || '',
+          olvashatosag: rawData.details.tipografia?.olvashatosag || '',
+          javaslatok: Array.isArray(rawData.details.tipografia?.javaslatok) ? rawData.details.tipografia.javaslatok : [],
+        },
+        vizualisNyelv: {
+          formak: rawData.details.vizualisNyelv?.formak || '',
+          elemek: rawData.details.vizualisNyelv?.elemek || '',
+          stilusEgyseg: rawData.details.vizualisNyelv?.stilusEgyseg || '',
+          javaslatok: Array.isArray(rawData.details.vizualisNyelv?.javaslatok) ? rawData.details.vizualisNyelv.javaslatok : [],
+        },
         createdAt: new Date().toISOString(),
         testLevel: 'detailed',
-        // New fields
-        hiresLogo: scoringData.hiresLogo,
-        logoTipus: scoringData.pipiLogopipitipus,
-        aiOsszpipiTekintes: scoringData.pipiOsszepipiTekintes,
+        // Extra fields
+        hiresLogo: rawData.scoring.hiresLogo,
+        logoTipus: rawData.scoring.logotipus,
       };
 
-      // Add sources from brandguideAI
-      if (scoringResponse.sources && scoringResponse.sources.length > 0) {
-        result.sources = scoringResponse.sources;
+      // Add sources from kb-extract
+      if (sources.length > 0) {
+        result.sources = sources;
       }
 
       // ========================================
-      // STEP 5: Supabase mentés
+      // STEP 4: Supabase mentés
       // ========================================
-      console.log('[ANALYZE V2] Step 5: Supabase mentés...');
+      console.log('[ANALYZE V4] Step 4: Supabase mentés...');
       await sendEvent('status', { message: 'Mentés adatbázisba...', phase: 'saving' });
 
-      const { data: insertedData, error: dbError } = await getSupabase()
+      const { data: insertedData, error: dbError } = await getSupabaseAdmin()
         .from('analyses')
         .insert({
           result: result as unknown as Record<string, unknown>,
@@ -596,19 +371,20 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (dbError) {
-        console.error('[ANALYZE V2] Supabase error:', dbError);
+        console.error('[ANALYZE V4] Supabase error:', JSON.stringify(dbError));
+        await sendEvent('debug', { message: `[DB] Hiba: ${dbError.message} (${dbError.code}) - ${dbError.details}` });
         throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
       }
 
       result.id = insertedData.id;
-      console.log('[ANALYZE V2] Analysis saved with ID:', insertedData.id);
+      console.log('[ANALYZE V4] Analysis saved with ID:', insertedData.id);
 
       // Send final result
       await sendEvent('complete', { id: insertedData.id, result });
       await writer.close();
 
     } catch (error) {
-      console.error('[ANALYZE V2] Error:', error);
+      console.error('[ANALYZE V4] Error:', error);
       await sendEvent('error', {
         message: error instanceof Error ? error.message : 'Ismeretlen hiba'
       });

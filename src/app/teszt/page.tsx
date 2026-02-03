@@ -3,11 +3,14 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/providers/auth-provider";
+import { useAuthModal } from "@/providers/auth-modal-provider";
 import { ArrowRight, ArrowLeft, Lightbulb05, CheckCircle, AlertCircle, Stars01, BarChart01, RefreshCw05 } from "@untitledui/icons";
 import { FileUpload } from "@/components/application/file-upload/file-upload-base";
 import { ColorPicker } from "@/components/upload";
 import { TransparentVideo } from "@/components/TransparentVideo";
 import { ResultSkeleton } from "@/components/results";
+import { HeaderAuth } from "@/components/layout/HeaderAuth";
 import { TestLevel } from "@/types";
 import { fileToBase64, getMediaType } from "@/lib/utils";
 
@@ -21,7 +24,7 @@ const LOADING_MESSAGES = {
         "Technikai részletek...",
         "Stílus meghatározása...",
     ],
-    scoring: [
+    analysis: [
         "Megkülönböztethetőség vizsgálata...",
         "Egyszerűség elemzése...",
         "Alkalmazhatóság tesztelése...",
@@ -29,24 +32,11 @@ const LOADING_MESSAGES = {
         "Időtállóság értékelése...",
         "Univerzalitás ellenőrzése...",
         "Láthatóság vizsgálata...",
+        "Színpaletta elemzése...",
+        "Tipográfiai illeszkedés...",
+        "Formai elemek elemzése...",
         "Erősségek összegyűjtése...",
         "Fejlesztendő területek azonosítása...",
-    ],
-    colors: [
-        "Színpaletta elemzése...",
-        "Színharmónia vizsgálata...",
-        "Színpszichológia értékelése...",
-        "Technikai reprodukálhatóság...",
-    ],
-    typography: [
-        "Betűtípus karakter vizsgálata...",
-        "Olvashatóság elemzése...",
-        "Tipográfiai illeszkedés...",
-    ],
-    visual: [
-        "Formai elemek elemzése...",
-        "Arculati elemek vizsgálata...",
-        "Stílusegység értékelése...",
     ],
     processing: [
         "Eredmények feldolgozása...",
@@ -56,18 +46,23 @@ const LOADING_MESSAGES = {
 };
 
 // Direct brandguideAI pipeline phases - must match API route phases
-type Phase = "start" | "vision" | "scoring" | "summary" | "details" | "processing" | "saving" | "complete" |
+type Phase = "start" | "vision" | "analysis" | "processing" | "saving" | "complete" |
+    // Legacy phases (kept for SSE compatibility if old API sends them)
+    "scoring" | "summary" | "details" |
+    // Rebranding phases
     "vision_old" | "vision_new" | "brandguide_old" | "brandguide_new" | "comparing";
 
 const phaseProgress: Record<Phase, number> = {
     start: 5,
     vision: 15,
-    scoring: 35,
-    summary: 55,
-    details: 70,
+    analysis: 50,
     processing: 85,
     saving: 95,
     complete: 100,
+    // Legacy phases (mapped to analysis)
+    scoring: 50,
+    summary: 50,
+    details: 50,
     // Rebranding phases
     vision_old: 10,
     vision_new: 35,
@@ -79,12 +74,14 @@ const phaseProgress: Record<Phase, number> = {
 const phaseLabels: Record<Phase, string> = {
     start: "Indítás",
     vision: "Kép feldolgozás",
-    scoring: "Pontozás",
-    summary: "Összefoglaló",
-    details: "Részletes elemzés",
+    analysis: "Elemzés",
     processing: "Feldolgozás",
     saving: "Mentés",
     complete: "Kész",
+    // Legacy phases
+    scoring: "Elemzés",
+    summary: "Elemzés",
+    details: "Elemzés",
     // Rebranding phases
     vision_old: "Régi kép",
     vision_new: "Új kép",
@@ -94,11 +91,21 @@ const phaseLabels: Record<Phase, string> = {
 };
 
 // Phase steps for the progress indicator
-const phaseSteps: Phase[] = ["vision", "scoring", "summary", "details", "processing", "saving"];
+const phaseSteps: Phase[] = ["vision", "analysis", "processing", "saving"];
 const rebrandingPhaseSteps: Phase[] = ["vision_old", "brandguide_old", "vision_new", "brandguide_new", "comparing", "saving"];
 
 export default function TestPage() {
     const router = useRouter();
+    const { user, isLoading: authLoading } = useAuth();
+    const { openAuthModal } = useAuthModal();
+
+    // Auto-open auth modal if not logged in
+    useEffect(() => {
+        if (!authLoading && !user) {
+            openAuthModal({ redirect: '/teszt' });
+        }
+    }, [authLoading, user, openAuthModal]);
+
     const [testLevel, setTestLevel] = useState<TestLevel>("detailed");
     const [logo, setLogo] = useState<File | null>(null);
     const [oldLogo, setOldLogo] = useState<File | null>(null);
@@ -112,8 +119,6 @@ export default function TestPage() {
     const [streamingPhase, setStreamingPhase] = useState<Phase>("start");
     const [streamingText, setStreamingText] = useState("");
     const [cyclingMessage, setCyclingMessage] = useState("");
-    const [debugLogs, setDebugLogs] = useState<string[]>([]);
-
     const [displayedMessage, setDisplayedMessage] = useState("");
 
     // Cycle through loading messages based on current phase
@@ -124,12 +129,9 @@ export default function TestPage() {
         if (streamingPhase === "start" || streamingPhase === "vision" || streamingPhase === "vision_old" || streamingPhase === "vision_new") {
             // During vision phase, cycle through vision messages
             messages = LOADING_MESSAGES.vision;
-        } else if (streamingPhase === "scoring" || streamingPhase === "brandguide_old" || streamingPhase === "brandguide_new") {
-            // During scoring phase, cycle through criteria
-            messages = LOADING_MESSAGES.scoring;
-        } else if (streamingPhase === "details" || streamingPhase === "comparing") {
-            // During details phase, cycle through color/typography messages
-            messages = [...LOADING_MESSAGES.colors, ...LOADING_MESSAGES.typography, ...LOADING_MESSAGES.visual];
+        } else if (streamingPhase === "analysis" || streamingPhase === "scoring" || streamingPhase === "summary" || streamingPhase === "details" || streamingPhase === "brandguide_old" || streamingPhase === "brandguide_new" || streamingPhase === "comparing") {
+            // During analysis phase, cycle through all analysis messages
+            messages = LOADING_MESSAGES.analysis;
         } else if (streamingPhase === "processing" || streamingPhase === "saving") {
             messages = LOADING_MESSAGES.processing;
         }
@@ -291,7 +293,7 @@ export default function TestPage() {
                                     setStreamingText((prev) => prev + parsed.text);
                                     break;
                                 case "debug":
-                                    setDebugLogs((prev) => [...prev, parsed.message]);
+                                    // Debug logs consumed silently (removed from UI)
                                     break;
                                 case "complete":
                                     setStreamingPhase("complete");
@@ -333,12 +335,12 @@ export default function TestPage() {
         return (
             <div className="relative min-h-screen">
                 {/* Background: Result page skeleton */}
-                <div className="pointer-events-none opacity-30">
+                <div className="pointer-events-none opacity-60">
                     <ResultSkeleton />
                 </div>
 
-                {/* Overlay with dark card */}
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                {/* Overlay with dark card - light scrim, dark box stays */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-[2px]">
                     {/* Dark card container */}
                     <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl mx-4">
                         {/* SCORE Animation at top */}
@@ -459,19 +461,6 @@ export default function TestPage() {
                             </div>
                         )}
 
-                        {/* Debug logs */}
-                        {debugLogs.length > 0 && (
-                            <div className="mt-4 rounded-xl border border-yellow-700/50 bg-yellow-900/20 p-4 text-left">
-                                <p className="mb-2 text-xs font-medium uppercase tracking-widest text-yellow-500">
-                                    Debug Log
-                                </p>
-                                <div className="max-h-48 overflow-y-auto space-y-1 font-mono text-xs text-yellow-300/80">
-                                    {debugLogs.map((log, i) => (
-                                        <p key={i}>{log}</p>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -500,9 +489,11 @@ export default function TestPage() {
                         Vissza
                     </Link>
                     <Link href="/" className="justify-self-center">
-                        <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-12" />
+                        <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-12" />
                     </Link>
-                    <div></div>
+                    <div className="justify-self-end">
+                        <HeaderAuth />
+                    </div>
                 </div>
             </div>
 

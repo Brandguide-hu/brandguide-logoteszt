@@ -1,26 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
 import {
     RadarChart,
     ResultSkeleton,
     ResultSidebar,
 } from "@/components/results";
-import { ArrowLeft, RefreshCw05, AlertCircle, CheckCircle, AlertTriangle, Lightbulb02 } from "@untitledui/icons";
+import {
+    ArrowLeft, RefreshCw05, AlertCircle, CheckCircle, AlertTriangle, Lightbulb02,
+    Target04, Stars01, Grid01, Lightbulb05, Clock, Globe01, Eye,
+    Palette, TypeSquare, LayersThree01,
+} from "@untitledui/icons";
+import { HeaderAuth } from "@/components/layout/HeaderAuth";
+import { ComponentType, SVGAttributes } from "react";
 
-// Criteria emoji icons (matching vertical design)
-const CRITERIA_EMOJIS: Record<string, string> = {
-    megkulonboztethetoseg: "🎯",
-    egyszeruseg: "✨",
-    alkalmazhatosag: "📐",
-    emlekezetesseg: "💡",
-    idotallosag: "⏳",
-    univerzalitas: "🌍",
-    lathatosag: "👁️",
+// Criteria line icons
+const CRITERIA_ICONS: Record<string, ComponentType<SVGAttributes<SVGSVGElement>>> = {
+    megkulonboztethetoseg: Target04,
+    egyszeruseg: Stars01,
+    alkalmazhatosag: Grid01,
+    emlekezetesseg: Lightbulb05,
+    idotallosag: Clock,
+    univerzalitas: Globe01,
+    lathatosag: Eye,
 };
 
 export default function ResultPage() {
@@ -33,14 +38,36 @@ export default function ResultPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<CriteriaName>("megkulonboztethetoseg");
+    const [displayScore, setDisplayScore] = useState(0);
+    const scoreAnimated = useRef(false);
+    const heroLogoRef = useRef<HTMLDivElement>(null);
+    const [heroLogoVisible, setHeroLogoVisible] = useState(true);
+
+    // Animated count-up for score
+    const animateScore = useCallback((target: number) => {
+        if (scoreAnimated.current) return;
+        scoreAnimated.current = true;
+        const duration = 1200;
+        const startTime = performance.now();
+        const step = (currentTime: number) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // easeOutCubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplayScore(Math.round(eased * target));
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            }
+        };
+        requestAnimationFrame(step);
+    }, []);
 
     useEffect(() => {
         async function fetchResult() {
             try {
-                const { data, error: dbError } = await supabase.from("analyses").select("*").eq("id", id).single();
-
-                if (dbError) throw dbError;
-                if (!data) throw new Error("Eredmény nem található");
+                const res = await fetch(`/api/result/${id}`);
+                if (!res.ok) throw new Error("Eredmény nem található");
+                const data = await res.json();
 
                 // Check if this is a rebranding result and redirect
                 const rawResult = data.result as { type?: string };
@@ -52,6 +79,7 @@ export default function ResultPage() {
                 const resultData = data.result as unknown as AnalysisResult;
                 setResult(resultData);
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+                animateScore(resultData.osszpontszam);
             } catch (err) {
                 console.error("Fetch error:", err);
                 setError("Nem sikerült betölteni az eredményt");
@@ -61,7 +89,19 @@ export default function ResultPage() {
         }
 
         fetchResult();
-    }, [id, router]);
+    }, [id, router, animateScore]);
+
+    // Track hero logo visibility for sidebar
+    useEffect(() => {
+        const el = heroLogoRef.current;
+        if (!el) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => setHeroLogoVisible(entry.isIntersecting),
+            { threshold: 0.1 }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [loading]);
 
     // Loading state - show skeleton UI
     if (loading) {
@@ -106,20 +146,20 @@ export default function ResultPage() {
     return (
         <div className="min-h-screen bg-[#f9fafb]">
             {/* Header */}
-            <header className="border-b border-[#e5e7eb] bg-white">
+            <header className="border-b border-gray-100 bg-white">
                 <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between">
                         <Link
                             href="/teszt"
-                            className="inline-flex items-center gap-2 text-sm text-[#6b7280] transition-colors hover:text-[#1f2937]"
+                            className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
                         >
                             <ArrowLeft className="size-4" />
                             Új teszt
                         </Link>
                         <Link href="/">
-                            <img src="/logolab-logo-new.svg" alt="LogoLab" className="h-10" />
+                            <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
                         </Link>
-                        <div className="w-20" />
+                        <HeaderAuth />
                     </div>
                 </div>
             </header>
@@ -129,102 +169,103 @@ export default function ResultPage() {
                 <div className="lg:grid lg:grid-cols-12 lg:gap-8">
                     {/* Main content area - 8 cols on desktop */}
                     <div className="lg:col-span-8">
-                        {/* Hero section with logo and score */}
-                        <div className="mb-6 overflow-hidden rounded-3xl border border-[#e5e7eb] bg-white shadow-sm">
-                            <div className="flex flex-col items-center gap-6 p-6 sm:flex-row sm:items-start sm:gap-8 sm:p-8">
-                                {/* Logo */}
-                                {logoUrl && (
-                                    <div className="shrink-0 rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] p-6">
-                                        <img
-                                            src={logoUrl}
-                                            alt="Elemzett logó"
-                                            className="max-h-28 max-w-[180px] object-contain"
-                                        />
-                                    </div>
-                                )}
+                        {/* Hero section with logo and score - 50/50 split */}
+                        <div className="mb-8 flex flex-col sm:flex-row gap-6 sm:gap-8">
+                            {/* Logo - large square, ~50% width */}
+                            {logoUrl && (
+                                <div ref={heroLogoRef} className="shrink-0 flex items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 w-full sm:w-[48%] aspect-square p-10">
+                                    <img
+                                        src={logoUrl}
+                                        alt="Elemzett logó"
+                                        className="max-h-full max-w-full object-contain"
+                                    />
+                                </div>
+                            )}
 
-                                {/* Score and rating */}
-                                <div className="flex-1 text-center sm:text-left">
-                                    <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[#6b7280]">
-                                        Összpontszám
-                                    </p>
-                                    <div className="flex items-baseline gap-1 justify-center sm:justify-start">
-                                        <span className="text-5xl font-bold text-[#1f2937]">
-                                            {result.osszpontszam}
-                                        </span>
-                                        <span className="text-xl text-[#6b7280]">/100</span>
-                                    </div>
-                                    <div className={`mt-3 inline-block rounded-lg px-3 py-1.5 text-sm font-semibold ${ratingStyle.bg} ${ratingStyle.color}`}>
-                                        {result.minosites}
-                                    </div>
+                            {/* Score and rating - ~50% width */}
+                            <div className="flex-1 flex flex-col justify-center py-4">
+                                <div className="flex items-baseline gap-1">
+                                    <span
+                                        className="font-bold text-[#37352f]"
+                                        style={{ fontSize: '96px', lineHeight: '96px' }}
+                                    >
+                                        {displayScore}
+                                    </span>
+                                    <span
+                                        className="font-normal text-[#9ca3af]"
+                                        style={{ fontSize: '30px' }}
+                                    >
+                                        /100
+                                    </span>
+                                </div>
+                                <div className={`mt-4 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${ratingStyle.bg} ${ratingStyle.color}`}>
+                                    {result.minosites}
                                 </div>
                             </div>
                         </div>
 
                         {/* Summary */}
-                        <div className="mb-6 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
-                            <h2 className="mb-3 text-xl font-bold text-[#1f2937]">
+                        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
+                            <h2 className="mb-3 text-xl font-light text-gray-900">
                                 Összefoglaló
                             </h2>
-                            <p className="text-[16px] leading-[26px] text-[#37352f]">
+                            <p className="text-[16px] leading-[26px] text-gray-500">
                                 {result.osszegzes}
                             </p>
                         </div>
 
                         {/* Strengths & Weaknesses - Two column */}
                         <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                            {/* Strengths - green-50 bg, green-800 title, green-700 text, green-500 dots */}
-                            <div className="rounded-lg bg-[#f0fdf4] p-4">
+                            <div className="rounded-2xl bg-emerald-50 p-5 transition-all duration-300">
                                 <div className="mb-3 flex items-center gap-2">
-                                    <CheckCircle className="size-5 text-[#16a34a]" />
-                                    <h3 className="font-bold text-[#047857]">Erősségek</h3>
+                                    <CheckCircle className="size-5 text-emerald-600" />
+                                    <h3 className="font-semibold text-emerald-800">Erősségek</h3>
                                 </div>
                                 {result.erossegek && result.erossegek.length > 0 ? (
                                     <ul className="space-y-2">
                                         {result.erossegek.map((item, index) => (
-                                            <li key={index} className="flex items-start gap-2 text-sm text-[#15803d]">
-                                                <span className="mt-1.5 text-[8px] text-[#10b981]">●</span>
+                                            <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
+                                                <span className="mt-1.5 text-[8px] text-emerald-500">●</span>
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                 ) : (
-                                    <p className="text-sm text-[#6b7280] italic">Nincs kiemelendő erősség</p>
+                                    <p className="text-sm text-gray-500 italic">Nincs kiemelendő erősség</p>
                                 )}
                             </div>
 
-                            {/* Weaknesses - amber-50 bg, amber-800 title, amber-700 text, amber-500 dots */}
-                            <div className="rounded-lg bg-[#fffbeb] p-4">
+                            <div className="rounded-2xl bg-amber-50 p-5 transition-all duration-300">
                                 <div className="mb-3 flex items-center gap-2">
-                                    <AlertTriangle className="size-5 text-[#d97706]" />
-                                    <h3 className="font-bold text-[#92400e]">Fejlesztendő</h3>
+                                    <AlertTriangle className="size-5 text-amber-600" />
+                                    <h3 className="font-semibold text-amber-800">Fejlesztendő</h3>
                                 </div>
                                 {result.fejlesztendo && result.fejlesztendo.length > 0 ? (
                                     <ul className="space-y-2">
                                         {result.fejlesztendo.map((item, index) => (
-                                            <li key={index} className="flex items-start gap-2 text-sm text-[#b45309]">
-                                                <span className="mt-1.5 text-[8px] text-[#d97706]">●</span>
+                                            <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
+                                                <span className="mt-1.5 text-[8px] text-amber-500">●</span>
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                 ) : (
-                                    <p className="text-sm text-[#6b7280] italic">Nincs kiemelendő fejlesztendő terület</p>
+                                    <p className="text-sm text-gray-500 italic">Nincs kiemelendő fejlesztendő terület</p>
                                 )}
                             </div>
                         </div>
 
                         {/* Radar Chart */}
-                        <div className="mb-6 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
-                            <h2 className="mb-4 text-xl font-bold text-[#1f2937]">
+                        <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
+                            <h2 className="mb-4 text-xl font-light text-gray-900">
                                 Szempontok áttekintése
                             </h2>
                             <RadarChart result={result} />
                         </div>
 
-                        {/* Criteria Details - Tabbed layout like vertical */}
+                        {/* Criteria Details - Tabbed layout */}
                         <div className="mb-6">
-                            <h2 className="mb-4 text-xl font-bold text-[#1f2937]">
+                            <h2 className="mb-4 text-xl font-light text-gray-900">
                                 Részletes értékelés
                             </h2>
                             <div className="flex gap-4">
@@ -235,26 +276,28 @@ export default function ResultPage() {
                                         const meta = CRITERIA_META[criteriaKey];
                                         if (!meta) return null;
 
-                                        const emoji = CRITERIA_EMOJIS[key] || "🎯";
+                                        const IconComp = CRITERIA_ICONS[key] || Target04;
                                         const isActive = activeTab === key;
+                                        const pct = value.pont / meta.maxScore;
+                                        const scoreColor = pct >= 0.7 ? "bg-emerald-50 text-emerald-700" : pct >= 0.4 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
 
                                         return (
                                             <button
                                                 key={key}
                                                 onClick={() => setActiveTab(criteriaKey)}
-                                                className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-left transition-all ${
+                                                className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${
                                                     isActive
-                                                        ? "border border-[#e5e7eb] bg-white shadow-sm"
-                                                        : "hover:bg-[#f3f4f6] hover:shadow-sm"
+                                                        ? "border border-gray-100 bg-white shadow-sm"
+                                                        : "hover:bg-gray-50"
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-base">{emoji}</span>
-                                                    <span className={`text-sm font-medium ${isActive ? "text-[#1f2937]" : "text-[#6b7280]"}`}>
+                                                    <IconComp className={`size-4 ${isActive ? "text-gray-900" : "text-gray-400"}`} />
+                                                    <span className={`text-sm font-medium ${isActive ? "text-gray-900" : "text-gray-500"}`}>
                                                         {meta.displayName}
                                                     </span>
                                                 </div>
-                                                <span className="rounded-full bg-[#fef2f2] px-2 py-0.5 text-xs font-semibold text-[#ef4444]">
+                                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreColor}`}>
                                                     {value.pont}/{meta.maxScore}
                                                 </span>
                                             </button>
@@ -263,7 +306,7 @@ export default function ResultPage() {
                                 </div>
 
                                 {/* Right side - Active tab content */}
-                                <div className="flex-1 rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                <div className="flex-1 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
                                     {(() => {
                                         const value = result.szempontok[activeTab];
                                         const meta = CRITERIA_META[activeTab];
@@ -273,39 +316,39 @@ export default function ResultPage() {
                                             <>
                                                 {/* Header with score */}
                                                 <div className="mb-4 flex items-start justify-between">
-                                                    <h3 className="text-xl font-bold text-[#1f2937]">
+                                                    <h3 className="text-xl font-light text-gray-900">
                                                         {meta.displayName}
                                                     </h3>
                                                     <div className="text-right">
-                                                        <span className="text-4xl font-bold text-[#1f2937]">{value.pont}</span>
-                                                        <span className="text-xl text-[#6b7280]"> / {meta.maxScore}</span>
+                                                        <span className="text-4xl font-bold text-gray-900">{value.pont}</span>
+                                                        <span className="text-xl text-gray-400"> / {meta.maxScore}</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Progress bar */}
-                                                <div className="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-[#e5e7eb]">
+                                                <div className="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
                                                     <div
-                                                        className="h-full rounded-full bg-[#fcd34d] transition-all duration-300"
+                                                        className="h-full rounded-full bg-[#fff012] transition-all duration-300"
                                                         style={{ width: `${(value.pont / meta.maxScore) * 100}%` }}
                                                     />
                                                 </div>
 
                                                 {/* Description */}
-                                                <p className="mb-6 text-[16px] leading-[26px] text-[#787774]">
+                                                <p className="mb-6 text-[16px] leading-[26px] text-gray-500">
                                                     {value.indoklas}
                                                 </p>
 
                                                 {/* Suggestions */}
                                                 {value.javaslatok && value.javaslatok.length > 0 && (
-                                                    <div className="rounded-lg bg-[#fefce8] p-4">
+                                                    <div className="rounded-xl bg-amber-50/60 p-4">
                                                         <div className="mb-3 flex items-center gap-2">
-                                                            <Lightbulb02 className="size-4 text-[#ca8a04]" />
-                                                            <h4 className="font-semibold text-[#ca8a04]">Javaslatok</h4>
+                                                            <Lightbulb02 className="size-4 text-amber-600" />
+                                                            <h4 className="font-semibold text-amber-700">Javaslatok</h4>
                                                         </div>
                                                         <ul className="space-y-2">
                                                             {value.javaslatok.map((javaslat, index) => (
-                                                                <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-[#787774]">
-                                                                    <span className="mt-2 text-[8px] text-[#ca8a04]">●</span>
+                                                                <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
+                                                                    <span className="mt-2 text-[8px] text-amber-500">●</span>
                                                                     {javaslat}
                                                                 </li>
                                                             ))}
@@ -321,33 +364,33 @@ export default function ResultPage() {
 
                         {/* Color, Typography Analysis - Two column grid */}
                         <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                            {/* Color Analysis - purple accent */}
+                            {/* Color Analysis */}
                             {result.szinek && (
-                                <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
                                     <div className="mb-5 flex items-center gap-3">
-                                        <span className="text-2xl">🎨</span>
-                                        <h3 className="text-xl font-semibold text-[#1f2937]">Színpaletta elemzés</h3>
+                                        <Palette className="size-5 text-purple-600" />
+                                        <h3 className="text-xl font-light text-gray-900">Színpaletta elemzés</h3>
                                     </div>
                                     <div className="space-y-5">
                                         <div>
-                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Harmónia</h4>
-                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.harmonia}</p>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.harmonia}</p>
                                         </div>
                                         <div>
-                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Pszichológia</h4>
-                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.pszichologia}</p>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.pszichologia}</p>
                                         </div>
                                         <div>
-                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#22c55e]">Technikai</h4>
-                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.szinek.technikai}</p>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-emerald-600">Technikai</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.technikai}</p>
                                         </div>
                                         {result.szinek.javaslatok && result.szinek.javaslatok.length > 0 && (
-                                            <div className="border-t border-[#e5e7eb] pt-5">
-                                                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#9333ea]">Javaslatok</h4>
+                                            <div className="border-t border-gray-100 pt-5">
+                                                <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-purple-600">Javaslatok</h4>
                                                 <ul className="space-y-2">
                                                     {result.szinek.javaslatok.map((javaslat, index) => (
-                                                        <li key={index} className="flex items-start gap-2 text-[14px] leading-[23px] text-[#787774]">
-                                                            <span className="mt-1.5 text-[8px] text-[#a78bfa]">●</span>
+                                                        <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
+                                                            <span className="mt-1.5 text-[8px] text-purple-400">●</span>
                                                             {javaslat}
                                                         </li>
                                                     ))}
@@ -358,29 +401,29 @@ export default function ResultPage() {
                                 </div>
                             )}
 
-                            {/* Typography Analysis - blue accent */}
+                            {/* Typography Analysis */}
                             {result.tipografia && (
-                                <div className="rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                                <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
                                     <div className="mb-5 flex items-center gap-3">
-                                        <span className="text-2xl">🔤</span>
-                                        <h3 className="text-xl font-semibold text-[#1f2937]">Tipográfia elemzés</h3>
+                                        <TypeSquare className="size-5 text-blue-600" />
+                                        <h3 className="text-xl font-light text-gray-900">Tipográfia elemzés</h3>
                                     </div>
                                     <div className="space-y-5">
                                         <div>
-                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Karakter</h4>
-                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.tipografia.karakter}</p>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.karakter}</p>
                                         </div>
-                                        <div className="border-t border-[#e5e7eb] pt-5">
-                                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Olvashatóság</h4>
-                                            <p className="text-[14px] leading-[23px] text-[#787774]">{result.tipografia.olvashatosag}</p>
+                                        <div className="border-t border-gray-100 pt-5">
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.olvashatosag}</p>
                                         </div>
                                         {result.tipografia.javaslatok && result.tipografia.javaslatok.length > 0 && (
-                                            <div className="border-t border-[#e5e7eb] pt-5">
-                                                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#3b82f6]">Javaslatok</h4>
+                                            <div className="border-t border-gray-100 pt-5">
+                                                <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-blue-600">Javaslatok</h4>
                                                 <ul className="space-y-2">
                                                     {result.tipografia.javaslatok.map((javaslat, index) => (
-                                                        <li key={index} className="flex items-start gap-2 text-[14px] leading-[23px] text-[#787774]">
-                                                            <span className="mt-1.5 text-[8px] text-[#93c5fd]">●</span>
+                                                        <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
+                                                            <span className="mt-1.5 text-[8px] text-blue-400">●</span>
                                                             {javaslat}
                                                         </li>
                                                     ))}
@@ -394,41 +437,41 @@ export default function ResultPage() {
 
                         {/* Visual Language - Full width */}
                         {result.vizualisNyelv && (
-                            <div className="mb-6 rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+                            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
                                 <div className="mb-5 flex items-center gap-3">
-                                    <span className="text-2xl">🎭</span>
-                                    <h3 className="text-xl font-semibold text-[#1f2937]">Vizuális nyelv elemzés</h3>
+                                    <LayersThree01 className="size-5 text-teal-600" />
+                                    <h3 className="text-xl font-light text-gray-900">Vizuális nyelv elemzés</h3>
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-3">
                                     <div>
-                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Formák</h4>
-                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.formak}</p>
+                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
+                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.formak}</p>
                                     </div>
                                     <div>
-                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Elemek</h4>
-                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.elemek}</p>
+                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
+                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.elemek}</p>
                                     </div>
                                     <div>
-                                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#14b8a6]">Stílusegység</h4>
-                                        <p className="text-[14px] leading-[23px] text-[#787774]">{result.vizualisNyelv.stilusEgyseg}</p>
+                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
+                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.stilusEgyseg}</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {/* CTA */}
-                        <div className="rounded-lg bg-[#1f2937] p-8 text-center sm:p-10">
-                            <span className="mb-4 inline-block rounded-full bg-[#fcd34d] px-4 py-1.5 text-xs font-bold text-[#1f2937]">
+                        <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
+                            <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
                                 brandguide/AI
                             </span>
-                            <h2 className="mb-3 text-2xl font-bold text-white sm:text-3xl">
+                            <h2 className="mb-3 text-2xl font-light text-white sm:text-3xl">
                                 Szeretnéd továbbfejleszteni a brandedet?
                             </h2>
-                            <p className="mx-auto mb-8 max-w-xl text-[#9ca3af]">
+                            <p className="mx-auto mb-8 max-w-xl text-gray-400">
                                 A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
                             </p>
                             <a href="https://ai.brandguide.hu/" target="_blank" rel="noopener noreferrer">
-                                <button className="group inline-flex items-center gap-3 rounded-full bg-[#fcd34d] px-8 py-4 font-semibold text-[#1f2937] transition-all hover:bg-[#fbbf24] hover:shadow-lg">
+                                <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg">
                                     Ismerkedj meg a brandguide/AI-jal
                                     <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -444,6 +487,7 @@ export default function ResultPage() {
                             logoUrl={logoUrl}
                             score={result.osszpontszam}
                             rating={result.minosites}
+                            showLogo={!heroLogoVisible}
                         />
                     </div>
                 </div>

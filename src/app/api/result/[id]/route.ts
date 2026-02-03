@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
@@ -8,9 +8,9 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const { data, error } = await getSupabase()
+    const { data, error } = await getSupabaseAdmin()
       .from('analyses')
-      .select('id, created_at, test_level, result')
+      .select('id, created_at, test_level, result, logo_base64')
       .eq('id', id)
       .single();
 
@@ -27,8 +27,8 @@ export async function GET(
       created_at: data.created_at,
       test_level: data.test_level,
       result: data.result,
-      // Add direct link to result page
-      result_url: `https://brandguide-logotest.netlify.app/eredmeny/${data.id}`,
+      logo_base64: data.logo_base64,
+      result_url: `https://logolab.hu/eredmeny/${data.id}`,
     }, {
       headers: {
         'Access-Control-Allow-Origin': '*',
