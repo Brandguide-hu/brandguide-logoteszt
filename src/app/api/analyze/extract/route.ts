@@ -81,22 +81,72 @@ const MAX_VALUES: Record<string, number> = {
   lathatosag: 10,
 };
 
+/**
+ * Normalize szempont name: remove accents, lowercase, strip non-alpha
+ * "Megkülönböztethetőség" -> "megkulonboztethetoseg"
+ * "Időtálló" -> "idotallo"
+ */
+function normalizeSzempontName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents
+    .toLowerCase()
+    .replace(/[^a-z]/g, ''); // strip non-alpha
+}
+
+// Map of normalized key prefixes to canonical keys
+const SZEMPONT_ALIASES: Record<string, keyof SzempontokMap> = {};
+for (const key of SZEMPONT_ORDER) {
+  SZEMPONT_ALIASES[key] = key; // exact match
+  // Also map common prefixes (first 6 chars) for fuzzy matching
+  SZEMPONT_ALIASES[key.slice(0, 6)] = key;
+}
+// Explicit aliases for known API response variants
+SZEMPONT_ALIASES['megkulonboztethetoseg'] = 'megkulonboztethetoseg';
+SZEMPONT_ALIASES['egyszeruseg'] = 'egyszeruseg';
+SZEMPONT_ALIASES['alkalmazhatosag'] = 'alkalmazhatosag';
+SZEMPONT_ALIASES['emlekezetesseg'] = 'emlekezetesseg';
+SZEMPONT_ALIASES['idotallosag'] = 'idotallosag';
+SZEMPONT_ALIASES['idotallo'] = 'idotallosag';
+SZEMPONT_ALIASES['univerzalitas'] = 'univerzalitas';
+SZEMPONT_ALIASES['lathatosag'] = 'lathatosag';
+
+function resolveKey(nev: string): keyof SzempontokMap | null {
+  const normalized = normalizeSzempontName(nev);
+
+  // Direct match
+  if (SZEMPONT_ALIASES[normalized]) return SZEMPONT_ALIASES[normalized];
+
+  // Prefix match (first 6 chars)
+  const prefix = normalized.slice(0, 6);
+  if (SZEMPONT_ALIASES[prefix]) return SZEMPONT_ALIASES[prefix];
+
+  // Substring match - find which key the normalized name starts with
+  for (const key of SZEMPONT_ORDER) {
+    if (normalized.startsWith(key.slice(0, 5))) return key;
+  }
+
+  return null;
+}
+
 function szempontokArrayToMap(items: KBExtractSzempontItem[]): SzempontokMap {
   const map = {} as SzempontokMap;
 
   for (const item of items) {
-    const key = item.nev as keyof SzempontokMap;
-    if (SZEMPONT_ORDER.includes(key)) {
+    const key = resolveKey(item.nev);
+    if (key && !map[key]) { // first match wins (skip duplicates)
       map[key] = {
         pont: item.pont,
         maxPont: item.maxPont,
         indoklas: item.indoklas,
         javaslatok: Array.isArray(item.javaslatok) ? item.javaslatok : [],
       };
+    } else if (!key) {
+      console.warn(`[VALIDATE] Unknown szempont name: "${item.nev}" (normalized: "${normalizeSzempontName(item.nev)}")`);
     }
   }
 
-  // Fallback: positional mapping
+  // Fallback: positional mapping for any still missing
   for (let i = 0; i < SZEMPONT_ORDER.length; i++) {
     const key = SZEMPONT_ORDER[i];
     if (!map[key] && items[i]) {
@@ -206,18 +256,12 @@ export async function POST(request: NextRequest) {
       console.log('[EXTRACT] Tokens used:', kbResponse.meta?.tokens_used);
       console.log('[EXTRACT] Szempontok count:', rawData.scoring.szempontok?.length);
 
-      // Fill in any missing szempontok with defaults (no retry - too slow for Netlify)
+      // Check for missing szempontok after robust matching
       const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
       if (missingKeys.length > 0) {
-        console.warn(`[EXTRACT] Missing ${missingKeys.length} szempontok: ${missingKeys.join(', ')} - filling defaults`);
-        for (const key of missingKeys) {
-          szempontokMap[key] = {
-            pont: 0,
-            maxPont: MAX_VALUES[key],
-            indoklas: 'Nem sikerült értékelni ezt a szempontot.',
-            javaslatok: [],
-          };
-        }
+        console.error(`[EXTRACT] Missing ${missingKeys.length} szempontok after matching: ${missingKeys.join(', ')}`);
+        console.error(`[EXTRACT] Raw szempontok names: ${rawData.scoring.szempontok?.map(s => s.nev).join(', ')}`);
+        throw new Error(`Hiányos elemzés: ${missingKeys.length} szempont hiányzik (${missingKeys.join(', ')}). Kérlek próbáld újra.`);
       }
 
       // ========================================
