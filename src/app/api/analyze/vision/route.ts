@@ -29,15 +29,26 @@ export async function POST(request: NextRequest) {
   const writer = stream.writable.getWriter();
 
   const sendEvent = async (event: string, data: unknown) => {
-    await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    try {
+      await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    } catch (e) {
+      console.error('[VISION] sendEvent failed:', e);
+    }
   };
 
-  // Heartbeat to keep connection alive
-  const heartbeatInterval = setInterval(async () => {
-    try {
-      await writer.write(encoder.encode(': heartbeat\n\n'));
-    } catch { /* stream closed */ }
-  }, 3000);
+  // Active heartbeat loop
+  let heartbeatRunning = true;
+  const heartbeatLoop = async () => {
+    while (heartbeatRunning) {
+      try {
+        await writer.write(encoder.encode(': heartbeat\n\n'));
+      } catch {
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  };
+  const heartbeatPromise = heartbeatLoop();
 
   const responsePromise = (async () => {
     try {
@@ -47,11 +58,11 @@ export async function POST(request: NextRequest) {
       const visionDescription = await analyzeImageWithVision(logo, mediaType, colors, fontName);
       console.log('[VISION] Description length:', visionDescription.length);
 
-      clearInterval(heartbeatInterval);
+      heartbeatRunning = false;
       await sendEvent('complete', { visionDescription });
       await writer.close();
     } catch (error) {
-      clearInterval(heartbeatInterval);
+      heartbeatRunning = false;
       console.error('[VISION] Error:', error);
       await sendEvent('error', {
         message: error instanceof Error ? error.message : 'Vision hiba'

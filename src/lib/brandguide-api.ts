@@ -169,7 +169,7 @@ export async function queryKBExtract<T>(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout (Netlify has 60s limit)
 
     const response = await fetch(BRANDGUIDE_ENDPOINT, {
       method: 'POST',

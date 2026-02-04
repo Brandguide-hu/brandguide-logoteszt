@@ -217,15 +217,27 @@ export async function POST(request: NextRequest) {
   const writer = stream.writable.getWriter();
 
   const sendEvent = async (event: string, data: unknown) => {
-    await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    try {
+      await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    } catch (e) {
+      console.error('[EXTRACT] sendEvent failed:', e);
+    }
   };
 
-  // Heartbeat
-  const heartbeatInterval = setInterval(async () => {
-    try {
-      await writer.write(encoder.encode(': heartbeat\n\n'));
-    } catch { /* stream closed */ }
-  }, 3000);
+  // Active heartbeat: writes continuously in the background
+  let heartbeatRunning = true;
+  const heartbeatLoop = async () => {
+    while (heartbeatRunning) {
+      try {
+        await writer.write(encoder.encode(': heartbeat\n\n'));
+      } catch {
+        break; // stream closed
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  };
+  // Start heartbeat immediately (don't await)
+  const heartbeatPromise = heartbeatLoop();
 
   const responsePromise = (async () => {
     try {
@@ -335,12 +347,12 @@ export async function POST(request: NextRequest) {
       result.id = insertedData.id;
       console.log('[EXTRACT] Saved with ID:', insertedData.id);
 
-      clearInterval(heartbeatInterval);
+      heartbeatRunning = false;
       await sendEvent('complete', { id: insertedData.id, result });
       await writer.close();
 
     } catch (error) {
-      clearInterval(heartbeatInterval);
+      heartbeatRunning = false;
       console.error('[EXTRACT] Error:', error);
       await sendEvent('error', {
         message: error instanceof Error ? error.message : 'Ismeretlen hiba'
