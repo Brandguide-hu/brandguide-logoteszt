@@ -326,8 +326,11 @@ export default function TestPage() {
                     throw new Error("Nem sikerült a kép leírása");
                 }
 
-                // === STEP 2: Extract API (separate Netlify function) ===
-                response = await fetch("/api/analyze/extract", {
+                // === STEP 2: Extract API (plain JSON, no SSE) ===
+                setStreamingStatus("Elemzés folyamatban...");
+                setStreamingPhase("analysis");
+
+                const extractResponse = await fetch("/api/analyze/extract", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -335,8 +338,22 @@ export default function TestPage() {
                         logo: base64,
                     }),
                 });
+
+                const extractData = await extractResponse.json();
+
+                if (!extractResponse.ok) {
+                    throw new Error(extractData.error || "Hiba történt az elemzés során");
+                }
+
+                setStreamingPhase("complete");
+                setStreamingStatus("Kész!");
+                setTimeout(() => {
+                    router.push(`/eredmeny/${extractData.id}`);
+                }, 500);
+                return; // done
             }
 
+            // Rebranding path: still uses SSE
             if (!response.ok) {
                 const contentType = response.headers.get("content-type");
                 if (contentType?.includes("application/json")) {
@@ -346,7 +363,6 @@ export default function TestPage() {
                 throw new Error("Hiba történt az elemzés során");
             }
 
-            // Read the main SSE stream (extract or rebranding)
             const finalResult = await readSSEStream(response, (event, parsed) => {
                 switch (event) {
                     case "status":
@@ -367,11 +383,7 @@ export default function TestPage() {
                 setStreamingPhase("complete");
                 setStreamingStatus("Kész!");
                 setTimeout(() => {
-                    if (isRebranding) {
-                        router.push(`/eredmeny/rebranding/${finalResult.data.id}`);
-                    } else {
-                        router.push(`/eredmeny/${finalResult.data.id}`);
-                    }
+                    router.push(`/eredmeny/rebranding/${finalResult.data.id}`);
                 }, 500);
             }
         } catch (err) {
