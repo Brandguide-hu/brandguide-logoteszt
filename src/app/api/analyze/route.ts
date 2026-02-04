@@ -259,31 +259,17 @@ export async function POST(request: NextRequest) {
         console.log('[ANALYZE V4] Szempontok array length:', rawData.scoring.szempontok?.length);
         console.log('[ANALYZE V4] Szempontok raw:', JSON.stringify(rawData.scoring.szempontok?.map(s => ({ nev: s.nev, pont: s.pont }))));
 
-        // Validate all 7 szempontok are present
+        // Fill in any missing szempontok with defaults (no retry - too slow for Netlify)
         const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
         if (missingKeys.length > 0) {
-          console.warn(`[ANALYZE V4] Missing szempontok: ${missingKeys.join(', ')} (got ${rawData.scoring.szempontok?.length || 0}/7)`);
-          await sendEvent('debug', { message: `[KB-EXTRACT] Hiányzó szempontok: ${missingKeys.join(', ')} - újrapróbálás...` });
-
-          // Retry once - the API sometimes returns partial results in best_effort mode
-          const retryResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
-            analysisQuery,
-            visionDescription,
-            KB_EXTRACT_FULL_SCHEMA,
-            'best_effort',
-            { max_sources: 5, language: 'hu' }
-          );
-
-          rawData = retryResponse.data;
-          sources = retryResponse.sources || [];
-          szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
-
-          console.log('[ANALYZE V4] Retry szempontok array length:', rawData.scoring.szempontok?.length);
-
-          const stillMissing = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
-          if (stillMissing.length > 0) {
-            console.error(`[ANALYZE V4] Still missing after retry: ${stillMissing.join(', ')}`);
-            throw new Error(`Hiányos elemzés: ${stillMissing.length} szempont hiányzik (${stillMissing.join(', ')}). Kérlek próbáld újra.`);
+          console.warn(`[ANALYZE V4] Missing ${missingKeys.length} szempontok: ${missingKeys.join(', ')} - filling defaults`);
+          for (const key of missingKeys) {
+            szempontokMap[key] = {
+              pont: 0,
+              maxPont: MAX_VALUES[key],
+              indoklas: 'Nem sikerült értékelni ezt a szempontot.',
+              javaslatok: [],
+            };
           }
         }
 

@@ -206,27 +206,17 @@ export async function POST(request: NextRequest) {
       console.log('[EXTRACT] Tokens used:', kbResponse.meta?.tokens_used);
       console.log('[EXTRACT] Szempontok count:', rawData.scoring.szempontok?.length);
 
-      // Validate all 7 szempontok
+      // Fill in any missing szempontok with defaults (no retry - too slow for Netlify)
       const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
       if (missingKeys.length > 0) {
-        console.warn(`[EXTRACT] Missing: ${missingKeys.join(', ')} - retrying...`);
-        await sendEvent('status', { message: 'Újrapróbálás...', phase: 'analysis' });
-
-        const retryResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
-          analysisQuery,
-          visionDescription,
-          KB_EXTRACT_FULL_SCHEMA,
-          'best_effort',
-          { max_sources: 5, language: 'hu' }
-        );
-
-        rawData = retryResponse.data;
-        sources = retryResponse.sources || [];
-        szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
-
-        const stillMissing = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
-        if (stillMissing.length > 0) {
-          throw new Error(`Hiányos elemzés: ${stillMissing.length} szempont hiányzik. Kérlek próbáld újra.`);
+        console.warn(`[EXTRACT] Missing ${missingKeys.length} szempontok: ${missingKeys.join(', ')} - filling defaults`);
+        for (const key of missingKeys) {
+          szempontokMap[key] = {
+            pont: 0,
+            maxPont: MAX_VALUES[key],
+            indoklas: 'Nem sikerült értékelni ezt a szempontot.',
+            javaslatok: [],
+          };
         }
       }
 
