@@ -2,8 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useAuth } from '@/providers/auth-provider';
-import { useAuthModal } from '@/providers/auth-modal-provider';
 import { TIER_INFO, Tier } from '@/types';
 
 const TIERS: { key: Tier; highlighted: boolean }[] = [
@@ -63,17 +61,9 @@ const DETAILED_FEATURES: Record<Tier, { included: string[]; excluded: string[] }
 
 export default function ArakPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { openAuthModal } = useAuthModal();
 
   const handleSelect = (tier: Tier) => {
-    const url = `/teszt?tier=${tier}`;
-    if (!user) {
-      router.push(url);
-      openAuthModal({ redirect: url });
-    } else {
-      router.push(url);
-    }
+    router.push(`/elemzes/uj?tier=${tier}`);
   };
 
   return (

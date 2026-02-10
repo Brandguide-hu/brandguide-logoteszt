@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01 } from "@untitledui/icons";
 import { TransparentVideo } from "@/components/TransparentVideo";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/providers/auth-provider";
-import { useAuthModal } from "@/providers/auth-modal-provider";
 import { TIER_INFO } from "@/types";
 
 const steps = [
@@ -51,17 +49,10 @@ const ratings = [
 
 export default function Home() {
     const router = useRouter();
-    const { user } = useAuth();
-    const { openAuthModal } = useAuthModal();
 
     const handleLogoElemzes = (tier?: string) => {
-        const url = tier ? `/teszt?tier=${tier}` : '/teszt';
-        if (!user) {
-            router.push(url);
-            openAuthModal({ redirect: url });
-        } else {
-            router.push(url);
-        }
+        const url = tier ? `/elemzes/uj?tier=${tier}` : '/elemzes/uj';
+        router.push(url);
     };
 
     return (

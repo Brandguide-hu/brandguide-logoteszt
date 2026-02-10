@@ -3,9 +3,11 @@
  *
  * Architektúra:
  * 1. Claude Vision - "Vakvezető Designer" leírás (~3500 kar)
- * 2. kb-extract API - Egyetlen hívás structured output-tal (scoring + summary + details)
+ * 2. kb-extract API - 2 párhuzamos hívás (scoring + summary/details)
+ *    - Scoring: named object schema (minden szempont külön property)
+ *    - Summary+Details: összefoglaló + színek/tipográfia/vizuális nyelv
  *
- * Összesen: 2 API hívás (korábban 4)
+ * Összesen: 3 API hívás (1 Vision + 2 kb-extract párhuzamosan)
  */
 
 import { NextRequest } from 'next/server';
@@ -18,22 +20,20 @@ import {
   KBExtractSource,
   ERROR_MESSAGES,
 } from '@/lib/brandguide-api';
-import { buildFullAnalysisQuery, KB_EXTRACT_FULL_SCHEMA, getRatingFromScore } from '@/lib/prompts-v2';
+import {
+  buildScoringExtractQuery,
+  buildSummaryDetailsExtractQuery,
+  KB_EXTRACT_SCORING_SCHEMA,
+  KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
+  getRatingFromScore,
+} from '@/lib/prompts-v2';
 
 // ============================================================================
-// TYPES - kb-extract structured output
+// TYPES - kb-extract structured output (named object schema)
 // ============================================================================
 
-// Raw API response type - szempontok as array (to keep schema grammar small)
-interface KBExtractSzempontItem {
-  nev: string;
-  pont: number;
-  maxPont: number;
-  indoklas: string;
-  javaslatok: string[];
-}
-
-interface KBExtractAnalysisDataRaw {
+// Scoring response - szempontok in nested object (new API structure)
+interface KBExtractScoringDataRaw {
   scoring: {
     osszpontszam: number;
     logotipus: 'klasszikus_logo' | 'kampany_badge' | 'illusztracio_jellegu';
@@ -43,8 +43,20 @@ interface KBExtractAnalysisDataRaw {
       tervezo: string;
       kontextus: string;
     };
-    szempontok: KBExtractSzempontItem[];
+    szempontok: {
+      megkulonboztethetoseg: CriteriaScore;
+      egyszeruseg: CriteriaScore;
+      alkalmazhatosag: CriteriaScore;
+      emlekezetesseg: CriteriaScore;
+      idotallosag: CriteriaScore;
+      univerzalitas: CriteriaScore;
+      lathatosag: CriteriaScore;
+    };
   };
+}
+
+// Summary + Details response
+interface KBExtractSummaryDetailsDataRaw {
   summary: {
     osszegzes: string;
     erossegek: string[];
@@ -88,72 +100,6 @@ const MAX_VALUES: Record<string, number> = {
 };
 
 /**
- * Normalize szempont name: remove accents, lowercase, strip non-alpha
- */
-function normalizeSzempontName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-}
-
-const SZEMPONT_ALIASES: Record<string, keyof SzempontokMap> = {};
-for (const key of SZEMPONT_ORDER) {
-  SZEMPONT_ALIASES[key] = key;
-  SZEMPONT_ALIASES[key.slice(0, 6)] = key;
-}
-SZEMPONT_ALIASES['idotallo'] = 'idotallosag';
-
-function resolveKey(nev: string): keyof SzempontokMap | null {
-  const normalized = normalizeSzempontName(nev);
-  if (SZEMPONT_ALIASES[normalized]) return SZEMPONT_ALIASES[normalized];
-  const prefix = normalized.slice(0, 6);
-  if (SZEMPONT_ALIASES[prefix]) return SZEMPONT_ALIASES[prefix];
-  for (const key of SZEMPONT_ORDER) {
-    if (normalized.startsWith(key.slice(0, 5))) return key;
-  }
-  return null;
-}
-
-/**
- * Convert szempontok array from kb-extract to named object format
- */
-function szempontokArrayToMap(items: KBExtractSzempontItem[]): SzempontokMap {
-  const map = {} as SzempontokMap;
-
-  for (const item of items) {
-    const key = resolveKey(item.nev);
-    if (key && !map[key]) {
-      map[key] = {
-        pont: item.pont,
-        maxPont: item.maxPont,
-        indoklas: item.indoklas,
-        javaslatok: Array.isArray(item.javaslatok) ? item.javaslatok : [],
-      };
-    } else if (!key) {
-      console.warn(`[VALIDATE] Unknown szempont name: "${item.nev}"`);
-    }
-  }
-
-  // Fallback: positional mapping
-  for (let i = 0; i < SZEMPONT_ORDER.length; i++) {
-    const key = SZEMPONT_ORDER[i];
-    if (!map[key] && items[i]) {
-      console.log(`[VALIDATE] Positional fallback for ${key} (got nev: "${items[i].nev}")`);
-      map[key] = {
-        pont: items[i].pont,
-        maxPont: items[i].maxPont,
-        indoklas: items[i].indoklas,
-        javaslatok: Array.isArray(items[i].javaslatok) ? items[i].javaslatok : [],
-      };
-    }
-  }
-
-  return map;
-}
-
-/**
  * Calculate total score from criteria (always recalculate, don't trust AI sum)
  */
 function calculateTotalScore(szempontok: SzempontokMap): number {
@@ -189,12 +135,38 @@ function clampSzempontok(szempontok: SzempontokMap): SzempontokMap {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { logo, mediaType, colors, fontName } = body as {
-    logo: string;
-    mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  let { logo, mediaType, colors, fontName, analysisId } = body as {
+    logo?: string;
+    mediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
     colors?: string[];
     fontName?: string;
+    analysisId?: string;
   };
+
+  // If analysisId provided but no logo, fetch from DB
+  if (analysisId && !logo) {
+    console.log('[ANALYZE V4] Fetching logo from DB for analysisId:', analysisId);
+    const { data: existingAnalysis, error: fetchError } = await getSupabaseAdmin()
+      .from('analyses')
+      .select('logo_base64')
+      .eq('id', analysisId)
+      .single();
+
+    if (fetchError || !existingAnalysis?.logo_base64) {
+      console.error('[ANALYZE V4] Failed to fetch logo from DB:', fetchError);
+      return new Response(
+        JSON.stringify({ error: 'Elemzés nem található vagy nincs logó' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    logo = existingAnalysis.logo_base64;
+    // Default to PNG if no mediaType provided
+    if (!mediaType) {
+      mediaType = 'image/png';
+    }
+    console.log('[ANALYZE V4] Logo fetched from DB, length:', logo?.length || 0);
+  }
 
   if (!logo) {
     return new Response(
@@ -202,6 +174,10 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
   }
+
+  // TypeScript: at this point logo is definitely a string
+  const validatedLogo: string = logo;
+  const validatedMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = mediaType || 'image/png';
 
   // Create a TransformStream for streaming
   const encoder = new TextEncoder();
@@ -244,7 +220,7 @@ export async function POST(request: NextRequest) {
       await sendEvent('status', { message: 'Kép feldolgozása...', phase: 'vision' });
 
       try {
-        visionDescription = await analyzeImageWithVision(logo, mediaType, colors, fontName);
+        visionDescription = await analyzeImageWithVision(validatedLogo, validatedMediaType, colors, fontName);
         console.log('[ANALYZE V4] Vision description length:', visionDescription.length);
         await sendEvent('debug', { message: `[VISION] Leírás kész: ${visionDescription.length} kar` });
       } catch (visionError: unknown) {
@@ -254,60 +230,81 @@ export async function POST(request: NextRequest) {
       }
 
       // ========================================
-      // STEP 2: kb-extract - Pontozás + Összefoglaló + Részletek (1 hívás)
+      // STEP 2: kb-extract - 2 párhuzamos hívás (scoring + summary/details)
+      // A szempontok NAMED OBJECT formátumban érkeznek, nem tömbben!
       // ========================================
-      console.log('[ANALYZE V4] Step 2: kb-extract - Teljes elemzés...');
+      console.log('[ANALYZE V4] Step 2: kb-extract - 2 párhuzamos hívás...');
       await sendEvent('status', { message: 'Elemzés folyamatban...', phase: 'analysis' });
 
-      let rawData: KBExtractAnalysisDataRaw;
+      let scoringData: KBExtractScoringDataRaw;
+      let summaryDetailsData: KBExtractSummaryDetailsDataRaw;
       let szempontokMap: SzempontokMap;
       let sources: KBExtractSource[] = [];
 
       try {
-        const analysisQuery = buildFullAnalysisQuery();
-        console.log('[ANALYZE V4] Analysis query length:', analysisQuery.length);
-        await sendEvent('debug', { message: `[KB-EXTRACT] Query küldése: ${analysisQuery.length} kar` });
+        const scoringQuery = buildScoringExtractQuery();
+        const summaryDetailsQuery = buildSummaryDetailsExtractQuery();
+        console.log('[ANALYZE V4] Scoring query length:', scoringQuery.length);
+        console.log('[ANALYZE V4] Summary+Details query length:', summaryDetailsQuery.length);
+        await sendEvent('debug', { message: `[KB-EXTRACT] 2 párhuzamos hívás indítása...` });
 
-        const kbResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
-          analysisQuery,
-          visionDescription,
-          KB_EXTRACT_FULL_SCHEMA,
-          'best_effort',
-          { max_sources: 5, language: 'hu' }
-        );
+        // Párhuzamos hívások
+        const [scoringResponse, summaryDetailsResponse] = await Promise.all([
+          queryKBExtract<KBExtractScoringDataRaw>(
+            scoringQuery,
+            visionDescription,
+            KB_EXTRACT_SCORING_SCHEMA,
+            'best_effort',
+            { max_sources: 5, language: 'hu' }
+          ),
+          queryKBExtract<KBExtractSummaryDetailsDataRaw>(
+            summaryDetailsQuery,
+            visionDescription,
+            KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
+            'best_effort',
+            { max_sources: 3, language: 'hu' }
+          ),
+        ]);
 
-        rawData = kbResponse.data;
-        sources = kbResponse.sources || [];
+        scoringData = scoringResponse.data;
+        summaryDetailsData = summaryDetailsResponse.data;
+        sources = [...(scoringResponse.sources || []), ...(summaryDetailsResponse.sources || [])];
 
-        // Convert szempontok array to named object
-        szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
+        // A szempontok nested objektumban érkeznek (új API struktúra: scoring.szempontok.X)
+        szempontokMap = {
+          megkulonboztethetoseg: scoringData.scoring.szempontok.megkulonboztethetoseg,
+          egyszeruseg: scoringData.scoring.szempontok.egyszeruseg,
+          alkalmazhatosag: scoringData.scoring.szempontok.alkalmazhatosag,
+          emlekezetesseg: scoringData.scoring.szempontok.emlekezetesseg,
+          idotallosag: scoringData.scoring.szempontok.idotallosag,
+          univerzalitas: scoringData.scoring.szempontok.univerzalitas,
+          lathatosag: scoringData.scoring.szempontok.lathatosag,
+        };
 
-        console.log('[ANALYZE V4] KB-Extract response received');
-        console.log('[ANALYZE V4] Tokens used:', kbResponse.meta?.tokens_used);
-        console.log('[ANALYZE V4] AI osszpontszam:', rawData.scoring.osszpontszam);
-        console.log('[ANALYZE V4] Logo type:', rawData.scoring.logotipus);
-        console.log('[ANALYZE V4] Szempontok array length:', rawData.scoring.szempontok?.length);
-        console.log('[ANALYZE V4] Szempontok raw:', JSON.stringify(rawData.scoring.szempontok?.map(s => ({ nev: s.nev, pont: s.pont }))));
+        console.log('[ANALYZE V4] KB-Extract responses received');
+        console.log('[ANALYZE V4] Scoring tokens used:', scoringResponse.meta?.tokens_used);
+        console.log('[ANALYZE V4] Summary tokens used:', summaryDetailsResponse.meta?.tokens_used);
+        console.log('[ANALYZE V4] AI osszpontszam:', scoringData.scoring.osszpontszam);
+        console.log('[ANALYZE V4] Logo type:', scoringData.scoring.logotipus);
 
-        // Check for missing szempontok after robust matching
+        // Check for missing szempontok
         const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
         if (missingKeys.length > 0) {
           console.error(`[ANALYZE V4] Missing ${missingKeys.length} szempontok: ${missingKeys.join(', ')}`);
-          console.error(`[ANALYZE V4] Raw names: ${rawData.scoring.szempontok?.map(s => s.nev).join(', ')}`);
           throw new Error(`Hiányos elemzés: ${missingKeys.length} szempont hiányzik (${missingKeys.join(', ')}). Kérlek próbáld újra.`);
         }
 
-        await sendEvent('debug', { message: `[KB-EXTRACT] Válasz OK, tokens: ${kbResponse.meta?.tokens_used}` });
-        await sendEvent('debug', { message: `[KB-EXTRACT] Trace: ${kbResponse.meta?.trace_id}` });
+        await sendEvent('debug', { message: `[KB-EXTRACT] Scoring OK, tokens: ${scoringResponse.meta?.tokens_used}` });
+        await sendEvent('debug', { message: `[KB-EXTRACT] Summary OK, tokens: ${summaryDetailsResponse.meta?.tokens_used}` });
 
-        if (rawData.scoring.hiresLogo?.ismert) {
-          console.log('[ANALYZE V4] Famous logo detected:', rawData.scoring.hiresLogo.marka);
-          await sendEvent('debug', { message: `[KB-EXTRACT] Híres logó: ${rawData.scoring.hiresLogo.marka}` });
+        if (scoringData.scoring.hiresLogo?.ismert) {
+          console.log('[ANALYZE V4] Famous logo detected:', scoringData.scoring.hiresLogo.marka);
+          await sendEvent('debug', { message: `[KB-EXTRACT] Híres logó: ${scoringData.scoring.hiresLogo.marka}` });
         }
 
         // Log criteria scores
         const criteriaScores = Object.entries(szempontokMap)
-          .map(([key, val]) => `${key}:${val.pont}`)
+          .map(([key, val]) => `${key}:${val?.pont || 0}`)
           .join(', ');
         await sendEvent('debug', { message: `[KB-EXTRACT] Pontszámok: ${criteriaScores}` });
 
@@ -330,7 +327,7 @@ export async function POST(request: NextRequest) {
 
       // Calculate total score - ALWAYS from criteria, never trust AI sum
       const calculatedScore = calculateTotalScore(clampedSzempontok);
-      const aiSuggestedScore = rawData.scoring.osszpontszam;
+      const aiSuggestedScore = scoringData.scoring.osszpontszam;
 
       if (Math.abs(aiSuggestedScore - calculatedScore) > 2) {
         console.log(`[ANALYZE V4] Score mismatch: AI suggested ${aiSuggestedScore}, calculated ${calculatedScore} - using calculated`);
@@ -343,38 +340,38 @@ export async function POST(request: NextRequest) {
       // Build the result object
       const result: AnalysisResult & {
         sources?: KBExtractSource[];
-        hiresLogo?: KBExtractAnalysisDataRaw['scoring']['hiresLogo'];
+        hiresLogo?: KBExtractScoringDataRaw['scoring']['hiresLogo'];
         logoTipus?: string;
       } = {
         id: '',
         osszpontszam,
         minosites,
         szempontok: clampedSzempontok,
-        osszegzes: rawData.summary.osszegzes || '',
-        erossegek: Array.isArray(rawData.summary.erossegek) ? rawData.summary.erossegek.filter(e => e && e.length > 0) : [],
-        fejlesztendo: Array.isArray(rawData.summary.fejlesztendo) ? rawData.summary.fejlesztendo.filter(f => f && f.length > 0) : [],
+        osszegzes: summaryDetailsData.summary.osszegzes || '',
+        erossegek: Array.isArray(summaryDetailsData.summary.erossegek) ? summaryDetailsData.summary.erossegek.filter(e => e && e.length > 0) : [],
+        fejlesztendo: Array.isArray(summaryDetailsData.summary.fejlesztendo) ? summaryDetailsData.summary.fejlesztendo.filter(f => f && f.length > 0) : [],
         szinek: {
-          harmonia: rawData.details.szinek?.harmonia || '',
-          pszichologia: rawData.details.szinek?.pszichologia || '',
-          technikai: rawData.details.szinek?.technikai || '',
-          javaslatok: Array.isArray(rawData.details.szinek?.javaslatok) ? rawData.details.szinek.javaslatok : [],
+          harmonia: summaryDetailsData.details.szinek?.harmonia || '',
+          pszichologia: summaryDetailsData.details.szinek?.pszichologia || '',
+          technikai: summaryDetailsData.details.szinek?.technikai || '',
+          javaslatok: Array.isArray(summaryDetailsData.details.szinek?.javaslatok) ? summaryDetailsData.details.szinek.javaslatok : [],
         },
         tipografia: {
-          karakter: rawData.details.tipografia?.karakter || '',
-          olvashatosag: rawData.details.tipografia?.olvashatosag || '',
-          javaslatok: Array.isArray(rawData.details.tipografia?.javaslatok) ? rawData.details.tipografia.javaslatok : [],
+          karakter: summaryDetailsData.details.tipografia?.karakter || '',
+          olvashatosag: summaryDetailsData.details.tipografia?.olvashatosag || '',
+          javaslatok: Array.isArray(summaryDetailsData.details.tipografia?.javaslatok) ? summaryDetailsData.details.tipografia.javaslatok : [],
         },
         vizualisNyelv: {
-          formak: rawData.details.vizualisNyelv?.formak || '',
-          elemek: rawData.details.vizualisNyelv?.elemek || '',
-          stilusEgyseg: rawData.details.vizualisNyelv?.stilusEgyseg || '',
-          javaslatok: Array.isArray(rawData.details.vizualisNyelv?.javaslatok) ? rawData.details.vizualisNyelv.javaslatok : [],
+          formak: summaryDetailsData.details.vizualisNyelv?.formak || '',
+          elemek: summaryDetailsData.details.vizualisNyelv?.elemek || '',
+          stilusEgyseg: summaryDetailsData.details.vizualisNyelv?.stilusEgyseg || '',
+          javaslatok: Array.isArray(summaryDetailsData.details.vizualisNyelv?.javaslatok) ? summaryDetailsData.details.vizualisNyelv.javaslatok : [],
         },
         createdAt: new Date().toISOString(),
         testLevel: 'detailed',
         // Extra fields
-        hiresLogo: rawData.scoring.hiresLogo,
-        logoTipus: rawData.scoring.logotipus,
+        hiresLogo: scoringData.scoring.hiresLogo,
+        logoTipus: scoringData.scoring.logotipus,
       };
 
       // Add sources from kb-extract
@@ -388,28 +385,54 @@ export async function POST(request: NextRequest) {
       console.log('[ANALYZE V4] Step 4: Supabase mentés...');
       await sendEvent('status', { message: 'Mentés adatbázisba...', phase: 'saving' });
 
-      const { data: insertedData, error: dbError } = await getSupabaseAdmin()
-        .from('analyses')
-        .insert({
-          result: result as unknown as Record<string, unknown>,
-          logo_base64: logo,
-          test_level: 'detailed',
-        })
-        .select('id')
-        .single();
+      let savedId: string;
 
-      if (dbError) {
-        console.error('[ANALYZE V4] Supabase error:', JSON.stringify(dbError));
-        await sendEvent('debug', { message: `[DB] Hiba: ${dbError.message} (${dbError.code}) - ${dbError.details}` });
-        throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+      if (analysisId) {
+        // Webhook flow — UPDATE existing record
+        const { error: dbError } = await (getSupabaseAdmin()
+          .from('analyses') as any)
+          .update({
+            result: result as unknown as Record<string, unknown>,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', analysisId);
+
+        if (dbError) {
+          console.error('[ANALYZE V4] Supabase update error:', JSON.stringify(dbError));
+          await sendEvent('debug', { message: `[DB] Update hiba: ${dbError.message} (${dbError.code}) - ${dbError.details}` });
+          throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+        }
+
+        savedId = analysisId;
+        console.log('[ANALYZE V4] Analysis updated:', analysisId);
+      } else {
+        // Legacy flow — INSERT new record
+        const { data: insertedData, error: dbError } = await getSupabaseAdmin()
+          .from('analyses')
+          .insert({
+            result: result as unknown as Record<string, unknown>,
+            logo_base64: validatedLogo,
+            test_level: 'detailed',
+          })
+          .select('id')
+          .single();
+
+        if (dbError) {
+          console.error('[ANALYZE V4] Supabase error:', JSON.stringify(dbError));
+          await sendEvent('debug', { message: `[DB] Hiba: ${dbError.message} (${dbError.code}) - ${dbError.details}` });
+          throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+        }
+
+        savedId = insertedData.id;
+        console.log('[ANALYZE V4] Analysis saved with ID:', insertedData.id);
       }
 
-      result.id = insertedData.id;
-      console.log('[ANALYZE V4] Analysis saved with ID:', insertedData.id);
+      result.id = savedId;
 
       // Send final result
       stopHeartbeat();
-      await sendEvent('complete', { id: insertedData.id, result });
+      await sendEvent('complete', { id: savedId, result });
       await writer.close();
 
     } catch (error) {

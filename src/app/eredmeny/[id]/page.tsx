@@ -77,6 +77,16 @@ export default function ResultPage() {
                 }
 
                 const resultData = data.result as unknown as AnalysisResult;
+
+                // Check if analysis is still processing (result is empty {})
+                if (!resultData || !resultData.osszpontszam) {
+                    setResult(null);
+                    if (data.logo_base64) {
+                        setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+                    }
+                    return;
+                }
+
                 setResult(resultData);
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
                 animateScore(resultData.osszpontszam);
@@ -90,6 +100,27 @@ export default function ResultPage() {
 
         fetchResult();
     }, [id, router, animateScore]);
+
+    // Auto-poll when result is not ready yet (processing)
+    useEffect(() => {
+        if (loading || error || result) return;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/result/${id}?t=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const resultData = data.result as unknown as AnalysisResult;
+                if (resultData && resultData.osszpontszam) {
+                    setResult(resultData);
+                    setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+                    animateScore(resultData.osszpontszam);
+                }
+            } catch {
+                // silent retry
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [loading, error, result, id, animateScore]);
 
     // Track hero logo visibility for sidebar
     useEffect(() => {
@@ -109,23 +140,43 @@ export default function ResultPage() {
     }
 
     // Error state
-    if (error || !result) {
+    if (error) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-white px-4">
                 <div className="max-w-md text-center">
                     <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-red-50">
                         <AlertCircle className="size-8 text-red-500" />
                     </div>
-                    <h1 className="mb-2 text-2xl font-bold text-[#1f2937]">{error || "Eredmény nem található"}</h1>
+                    <h1 className="mb-2 text-2xl font-bold text-[#1f2937]">{error}</h1>
                     <p className="mb-8 text-[#6b7280]">
                         Lehet, hogy az elemzés már nem elérhető, vagy hibás a link.
                     </p>
-                    <Link href="/teszt">
+                    <Link href="/elemzes/uj">
                         <button className="inline-flex items-center gap-2 rounded-full bg-[#1f2937] px-6 py-3 font-medium text-white transition-all hover:bg-[#374151]">
                             <RefreshCw05 className="size-4" />
-                            Új teszt indítása
+                            Új elemzés indítása
                         </button>
                     </Link>
+                </div>
+            </div>
+        );
+    }
+
+    // Processing state — result not ready yet
+    if (!result) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-white px-4">
+                <div className="max-w-md text-center">
+                    <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-yellow-50">
+                        <div className="animate-spin size-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
+                    </div>
+                    <h1 className="mb-2 text-2xl font-bold text-[#1f2937]">Elemzés folyamatban...</h1>
+                    <p className="mb-4 text-[#6b7280]">
+                        A logód elemzése még tart. Ez általában 1-2 percet vesz igénybe.
+                    </p>
+                    <p className="text-sm text-gray-400">
+                        Az oldal automatikusan frissül, ha elkészül az eredmény.
+                    </p>
                 </div>
             </div>
         );
@@ -150,7 +201,7 @@ export default function ResultPage() {
                 <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between">
                         <Link
-                            href="/teszt"
+                            href="/elemzes/uj"
                             className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
                         >
                             <ArrowLeft className="size-4" />

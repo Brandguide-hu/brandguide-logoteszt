@@ -20,7 +20,7 @@ export function Footer() {
             <h3 className="text-sm font-semibold text-white mb-3">Linkek</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/teszt" className="text-sm hover:text-white transition-colors">
+                <Link href="/elemzes/uj" className="text-sm hover:text-white transition-colors">
                   Logo elemzés
                 </Link>
               </li>

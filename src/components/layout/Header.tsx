@@ -7,7 +7,7 @@ import { useAuthModal } from '@/providers/auth-modal-provider';
 import { cx } from '@/utils/cx';
 
 const NAV_ITEMS = [
-  { label: 'Logo elemzés', href: '/teszt', authRequired: false },
+  { label: 'Logo elemzés', href: '/elemzes/uj', authRequired: false },
   { label: 'Árak', href: '/arak', authRequired: false },
   { label: 'Logo galéria', href: '/galeria', authRequired: false },
   { label: 'Dashboard', href: '/dashboard', authRequired: true },
@@ -28,12 +28,7 @@ export function Header() {
   };
 
   const handleNavClick = (href: string) => {
-    if (href === '/teszt' && !user) {
-      router.push('/teszt');
-      openAuthModal({ redirect: '/teszt' });
-    } else {
-      router.push(href);
-    }
+    router.push(href);
     setMobileMenuOpen(false);
   };
 
@@ -52,7 +47,7 @@ export function Header() {
             onClick={handleLogoClick}
             className="hover:opacity-80 transition-opacity cursor-pointer"
           >
-            <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-8" />
+            <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-11" />
           </button>
 
           {/* Desktop nav */}
@@ -63,7 +58,7 @@ export function Header() {
                 onClick={() => handleNavClick(item.href)}
                 className={cx(
                   'px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer',
-                  pathname === item.href || pathname?.startsWith(item.href + '/')
+                  pathname === item.href || pathname?.startsWith(item.href + '/') || (item.href === '/elemzes/uj' && pathname?.startsWith('/elemzes'))
                     ? 'bg-gray-100 text-gray-900'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 )}
@@ -154,7 +149,7 @@ export function Header() {
                 onClick={() => handleNavClick(item.href)}
                 className={cx(
                   'w-full text-left px-4 py-3 text-sm font-medium rounded-lg transition-colors cursor-pointer',
-                  pathname === item.href || pathname?.startsWith(item.href + '/')
+                  pathname === item.href || pathname?.startsWith(item.href + '/') || (item.href === '/elemzes/uj' && pathname?.startsWith('/elemzes'))
                     ? 'bg-gray-100 text-gray-900'
                     : 'text-gray-600 hover:bg-gray-50'
                 )}

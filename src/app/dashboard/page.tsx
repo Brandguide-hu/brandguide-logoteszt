@@ -12,6 +12,7 @@ interface AnalysisSummary {
   tier: string;
   status: string;
   visibility: string;
+  rejection_reason: string | null;
   category: string;
   created_at: string;
   result: { osszpontszam?: number } | null;
@@ -38,7 +39,7 @@ export default function DashboardPage() {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase
       .from('analyses')
-      .select('id, logo_name, tier, status, visibility, category, created_at, result')
+      .select('id, logo_name, tier, status, visibility, rejection_reason, category, created_at, result')
       .eq('user_id', user!.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -96,8 +97,8 @@ export default function DashboardPage() {
 
         {/* New analysis CTA */}
         <button
-          onClick={() => router.push('/dashboard/uj')}
-          className="w-full mb-8 py-4 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors text-lg flex items-center justify-center gap-2"
+          onClick={() => router.push('/elemzes/uj')}
+          className="w-full mb-8 py-4 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors text-lg flex items-center justify-center gap-2 cursor-pointer"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

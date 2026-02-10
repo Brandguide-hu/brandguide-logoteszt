@@ -169,7 +169,7 @@ export async function queryKBExtract<T>(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout (Netlify has 60s limit)
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Netlify function limit: 60s)
 
     const response = await fetch(BRANDGUIDE_ENDPOINT, {
       method: 'POST',
@@ -241,7 +241,7 @@ export async function queryKBExtract<T>(
     if (error instanceof DOMException && error.name === 'AbortError') {
       console.error('[KB-EXTRACT] Request timed out after 55s');
       throw new BrandguideAPIError(
-        'A kb-extract API nem válaszolt időben (55s timeout). Kérlek próbáld újra.',
+        'Az elemzés időtúllépés miatt megszakadt. Kérlek próbáld újra.',
         'TIMEOUT'
       );
     }

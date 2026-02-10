@@ -28,6 +28,7 @@ interface AnalysisData {
   logo_original_path: string | null;
   result: AnalysisResult | null;
   share_hash: string | null;
+  rejection_reason: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -40,6 +41,7 @@ export default function AnalysisDetailPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   const analysisId = params.id as string;
 
@@ -54,11 +56,18 @@ export default function AnalysisDetailPage() {
     }
   }, [user, authLoading, analysisId]);
 
+  // Auto-poll when processing
+  useEffect(() => {
+    if (analysis?.status !== 'processing') return;
+    const interval = setInterval(() => fetchAnalysis(), 5000);
+    return () => clearInterval(interval);
+  }, [analysis?.status]);
+
   const fetchAnalysis = async () => {
     const supabase = getSupabaseBrowserClient();
 
     const { data, error: fetchError } = await (supabase.from('analyses') as any)
-      .select('id, user_id, tier, status, visibility, logo_name, creator_name, category, logo_base64, logo_original_path, result, share_hash, created_at, completed_at')
+      .select('id, user_id, tier, status, visibility, logo_name, creator_name, category, logo_base64, logo_original_path, result, share_hash, rejection_reason, created_at, completed_at')
       .eq('id', analysisId)
       .eq('user_id', user!.id)
       .is('deleted_at', null)
@@ -118,6 +127,26 @@ export default function AnalysisDetailPage() {
     }
 
     setAnalysis(prev => prev ? { ...prev, visibility: 'pending_approval' } : null);
+  };
+
+  const handleStartAnalysis = async () => {
+    setIsStarting(true);
+    try {
+      const res = await fetch(`/api/analysis/${analysisId}/start`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt az elemzés indítása során.');
+        setIsStarting(false);
+        return;
+      }
+      // Set to processing and start polling
+      setAnalysis(prev => prev ? { ...prev, status: 'processing' } : null);
+    } catch {
+      alert('Hiba történt az elemzés indítása során.');
+      setIsStarting(false);
+    }
   };
 
   if (authLoading || isLoading) {
@@ -204,7 +233,7 @@ export default function AnalysisDetailPage() {
                 Vissza
               </button>
               <button
-                onClick={() => router.push('/dashboard/uj')}
+                onClick={() => router.push('/elemzes/uj')}
                 className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-medium rounded-lg transition-colors"
               >
                 Új elemzés
@@ -216,7 +245,38 @@ export default function AnalysisDetailPage() {
     );
   }
 
-  // No result yet (pending)
+  // Pending state - show start button
+  if (analysis.status === 'pending' && !result) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Elemzés indítása</h2>
+            <p className="text-gray-500 mb-2">
+              A logód feltöltése sikeres volt. Kattints az alábbi gombra az elemzés elindításához.
+            </p>
+            <p className="text-sm text-gray-400 mb-6">
+              {analysis.logo_name} &bull; {TIER_INFO[analysis.tier].label}
+            </p>
+            <button
+              onClick={handleStartAnalysis}
+              disabled={isStarting}
+              className="px-8 py-3 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {isStarting ? 'Indítás...' : 'Elemzés indítása'}
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // No result but not pending
   if (!result) {
     return (
       <AppLayout>
@@ -225,7 +285,7 @@ export default function AnalysisDetailPage() {
             <p className="text-gray-500 text-lg mb-4">Az elemzés még nem készült el.</p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="text-gray-900 font-medium hover:underline"
+              className="text-gray-900 font-medium hover:underline cursor-pointer"
             >
               Vissza a Dashboard-ra
             </button>
@@ -268,8 +328,21 @@ export default function AnalysisDetailPage() {
                   Jóváhagyásra vár
                 </span>
               )}
+              {analysis.visibility === 'rejected' && (
+                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                  Elutasítva
+                </span>
+              )}
             </div>
           </div>
+
+          {analysis.visibility === 'rejected' && analysis.rejection_reason && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
+              <p className="text-sm text-red-700">
+                <strong>Elutasítás indoka:</strong> {analysis.rejection_reason}
+              </p>
+            </div>
+          )}
 
           {/* Main content grid: result + sidebar */}
           <div className="grid lg:grid-cols-[1fr_280px] gap-8">
@@ -399,10 +472,10 @@ export default function AnalysisDetailPage() {
                     erősségek/fejlesztendő listáját és megosztható linket.
                   </p>
                   <button
-                    onClick={() => router.push('/dashboard/uj')}
-                    className="px-6 py-3 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors"
+                    onClick={() => router.push('/elemzes/uj?tier=paid')}
+                    className="px-6 py-3 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors cursor-pointer"
                   >
-                    Zárt elemzés rendelése &mdash; {TIER_INFO.paid.price}
+                    Részletes elemzés feloldása &mdash; {TIER_INFO.paid.price}
                   </button>
                 </div>
               )}
@@ -493,52 +566,74 @@ export default function AnalysisDetailPage() {
                   </div>
                 </div>
 
-                {/* Share buttons (paid) */}
-                {isPaid && (
+                {/* Share buttons (all tiers) */}
+                {isCompleted && (
                   <div className="bg-white rounded-2xl border border-gray-200 p-5">
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Megosztás</h3>
+                    {isFree && analysis.visibility === 'pending_approval' && (
+                      <p className="text-xs text-gray-400">Jóváhagyás után lesz elérhető</p>
+                    )}
+                    {isFree && analysis.visibility === 'rejected' && (
+                      <p className="text-xs text-red-400">Az elemzés nem került jóváhagyásra</p>
+                    )}
                     <div className="space-y-2">
-                      <button
-                        onClick={() => {
-                          const url = analysis.share_hash
-                            ? `${window.location.origin}/s/${analysis.share_hash}`
-                            : window.location.href;
-                          navigator.clipboard.writeText(url);
-                        }}
-                        className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Link másolása
-                      </button>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const url = encodeURIComponent(window.location.href);
-                            window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
-                          }}
-                          className="flex-1 flex items-center justify-center rounded-lg bg-[#1877F2] px-3 py-2 text-sm text-white hover:bg-[#1877F2]/90 transition-colors"
-                        >
-                          FB
-                        </button>
-                        <button
-                          onClick={() => {
-                            const url = encodeURIComponent(window.location.href);
-                            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank', 'width=600,height=400');
-                          }}
-                          className="flex-1 flex items-center justify-center rounded-lg bg-[#0A66C2] px-3 py-2 text-sm text-white hover:bg-[#0A66C2]/90 transition-colors"
-                        >
-                          LI
-                        </button>
-                        <button
-                          onClick={() => {
-                            const url = encodeURIComponent(window.location.href);
-                            const text = encodeURIComponent(`A logom ${result.osszpontszam}/100 pontot kapott a LogoLab-on!`);
-                            window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'width=600,height=400');
-                          }}
-                          className="flex-1 flex items-center justify-center rounded-lg bg-black px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors"
-                        >
-                          X
-                        </button>
-                      </div>
+                      {(isPaid || analysis.visibility === 'public') && (
+                        <>
+                          <button
+                            onClick={() => {
+                              let url: string;
+                              if (isPaid && analysis.share_hash) {
+                                url = `${window.location.origin}/megosztott/${analysis.share_hash}`;
+                              } else if (analysis.visibility === 'public') {
+                                url = `${window.location.origin}/galeria/${analysis.id}`;
+                              } else {
+                                url = window.location.href;
+                              }
+                              navigator.clipboard.writeText(url);
+                              alert('Link másolva!');
+                            }}
+                            className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                          >
+                            Link másolása
+                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                const shareUrl = isPaid && analysis.share_hash
+                                  ? `${window.location.origin}/megosztott/${analysis.share_hash}`
+                                  : window.location.href;
+                                window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank', 'width=600,height=400');
+                              }}
+                              className="flex-1 flex items-center justify-center rounded-lg bg-[#1877F2] px-3 py-2 text-sm text-white hover:bg-[#1877F2]/90 transition-colors cursor-pointer"
+                            >
+                              FB
+                            </button>
+                            <button
+                              onClick={() => {
+                                const shareUrl = isPaid && analysis.share_hash
+                                  ? `${window.location.origin}/megosztott/${analysis.share_hash}`
+                                  : window.location.href;
+                                window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, '_blank', 'width=600,height=400');
+                              }}
+                              className="flex-1 flex items-center justify-center rounded-lg bg-[#0A66C2] px-3 py-2 text-sm text-white hover:bg-[#0A66C2]/90 transition-colors cursor-pointer"
+                            >
+                              LI
+                            </button>
+                            <button
+                              onClick={() => {
+                                const shareUrl = isPaid && analysis.share_hash
+                                  ? `${window.location.origin}/megosztott/${analysis.share_hash}`
+                                  : window.location.href;
+                                const text = encodeURIComponent(`A logom ${result.osszpontszam}/100 pontot kapott a LogoLab-on!`);
+                                window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(shareUrl)}`, '_blank', 'width=600,height=400');
+                              }}
+                              className="flex-1 flex items-center justify-center rounded-lg bg-black px-3 py-2 text-sm text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                            >
+                              X
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

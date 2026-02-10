@@ -541,7 +541,7 @@ export const KB_EXTRACT_FULL_SCHEMA = {
           items: {
             type: "object",
             properties: {
-              nev: { type: "string" },
+              nev: { type: "string", enum: ["Megkülönböztethetőség", "Egyszerűség", "Alkalmazhatóság", "Emlékezetesség", "Időtállóság", "Univerzalitás", "Láthatóság"] },
               pont: { type: "integer" },
               maxPont: { type: "integer" },
               indoklas: { type: "string" },
@@ -601,8 +601,274 @@ export const KB_EXTRACT_FULL_SCHEMA = {
   required: ["scoring", "summary", "details"]
 };
 
+// ============================================================================
+// SPLIT SCHEMAS - Két párhuzamos kb-extract híváshoz
+// ============================================================================
+
+/**
+ * Named szempontok schema - minden szempont külön kulcsként, required-ként.
+ * Ez kikényszeríti, hogy az API mind a 7-et kitöltse (array-nél "lustán" csak 1-et adott).
+ */
+const szempontItemSchema = {
+  type: "object" as const,
+  properties: {
+    pont: { type: "integer" as const },
+    maxPont: { type: "integer" as const },
+    indoklas: { type: "string" as const },
+    javaslatok: { type: "array" as const, items: { type: "string" as const } }
+  },
+  required: ["pont", "maxPont", "indoklas", "javaslatok"] as const,
+};
+
+export const KB_EXTRACT_SCORING_SCHEMA = {
+  type: "object",
+  properties: {
+    scoring: {
+      type: "object",
+      properties: {
+        osszpontszam: { type: "integer" },
+        logotipus: { type: "string", enum: ["klasszikus_logo", "kampany_badge", "illusztracio_jellegu"] },
+        hiresLogo: {
+          type: "object",
+          properties: {
+            ismert: { type: "boolean" },
+            marka: { type: "string" },
+            tervezo: { type: "string" },
+            kontextus: { type: "string" }
+          },
+          required: ["ismert", "marka", "tervezo", "kontextus"]
+        },
+        szempontok: {
+          type: "object",
+          properties: {
+            megkulonboztethetoseg: szempontItemSchema,
+            egyszeruseg: szempontItemSchema,
+            alkalmazhatosag: szempontItemSchema,
+            emlekezetesseg: szempontItemSchema,
+            idotallosag: szempontItemSchema,
+            univerzalitas: szempontItemSchema,
+            lathatosag: szempontItemSchema,
+          },
+          required: [
+            "megkulonboztethetoseg", "egyszeruseg", "alkalmazhatosag",
+            "emlekezetesseg", "idotallosag", "univerzalitas", "lathatosag"
+          ]
+        },
+      },
+      required: ["osszpontszam", "logotipus", "hiresLogo", "szempontok"]
+    }
+  },
+  required: ["scoring"],
+};
+
+export const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: KB_EXTRACT_FULL_SCHEMA.properties.summary,
+    details: KB_EXTRACT_FULL_SCHEMA.properties.details,
+  },
+  required: ["summary", "details"],
+};
+
+// ============================================================================
+// SPLIT QUERY BUILDERS - Két párhuzamos kb-extract híváshoz
+// ============================================================================
+
+/**
+ * Build scoring query for kb-extract API (parallel call 1/2)
+ * Tartalmazza: híres logók, logó definíció, pontozási kritériumok
+ */
+export function buildScoringExtractQuery(): string {
+  return `## HÍRES LOGÓK FELISMERÉSE
+
+Ha a logó egy **ismert márka** (Fortune 500, híres brand, kulturális ikon):
+- Nevezd meg a márkát és kontextust
+- Ha ismered a tervezőt, említsd meg
+- Értékeld objektíven – a hírnév NEM jelent automatikusan magas pontot
+
+Ha **TV műsor, film, esemény** logója:
+- Jelezd, hogy ez "kampány-badge" vagy "event branding", nem klasszikus céges logó
+- Más szabályok vonatkoznak rá: lehet komplexebb, mert rövid életciklusra tervezték
+
+---
+
+## LOGÓ DEFINÍCIÓ – KRITIKUS ALAPELV
+
+Egy logó NEM illusztráció. A logó egyszerű, skálázható, időtálló azonosító jel.
+
+### Mi a különbség?
+
+| LOGÓ | ILLUSZTRÁCIÓ |
+|------|--------------|
+| Egyszerűsíthető 2-3 elemre | Sok részlet = gazdagság |
+| 1-2 színnel is működik | Színek nélkül értelmetlen |
+| 10mm-en is felismerhető | Kicsiben részletek elvesznek |
+| 50 év múlva is modern | Korszakhoz kötött |
+| Gyerek le tudná rajzolni | Művészi készség kell hozzá |
+
+### AUTOMATIKUS "ILLUSZTRÁCIÓ-GYANÚ" INDIKÁTOROK:
+
+Ha ezek közül **3 vagy több** jelen van → **MAX 55-60 pont összesen**:
+- 4+ szín használata gradienssel
+- Apró, 10mm alatt olvashatatlan részletek
+- Körbe írt szöveg + központi kép + peremdekoráció együtt
+- Fotorealisztikus vagy árnyékolt elemek
+- Badge/embléma stílus túl sok réteggel (5+ vizuális elem)
+- "Nem tudnám 30 másodperc alatt fejből lerajzolni"
+
+### A "BADGE-CSAPDA":
+
+Sok logó badge formátumú (kör/pajzs + szöveg körben + központi kép).
+Ez ÖNMAGÁBAN rendben van (gondolj a Starbucksra).
+
+DE ha a badge-en belül:
+- 3+ különböző vizuális elem van
+- Apró dekoratív részletek vannak a peremen
+- A központi kép önmagában is összetett illusztráció
+
+→ Ez már NEM működőképes logó. Jelezd ezt explicit módon!
+
+---
+
+## ÉRTÉKELÉSI SZEMPONTOK – Brandguide 100 pontos rendszer
+
+### ÖSSZPONTSZÁM KALIBRÁCIÓ – SZIGORÚ!
+
+| Pontszám | Mit jelent | Példák |
+|----------|------------|--------|
+| 85-100 | Világszínvonalú, ikonikus | Nike, Apple, FedEx, McDonald's |
+| 70-84 | Professzionális, jól működik | Jó ügynökségi munka |
+| 55-69 | Működőképes, de fejlesztésre szorul | Átlagos kisvállalkozói logók |
+| 40-54 | Jelentős problémák, újratervezés javasolt | Canva-sablonok, túlzsúfolt badge-ek |
+| 0-39 | Alapvető koncepcionális gondok | Olvashatatlan, pixeles |
+
+### AUTOMATIKUS PONTSZÁM-PLAFON:
+
+- Ha a logó **illusztráció-komplexitású** → MAX 50 pont
+- Ha **badge 5+ elemmel** → MAX 55 pont
+- Ha **gradiens + apró részletek együtt** → MAX 45 pont
+- Ha **pixeles, elmosódott vagy rossz minőségű** → MAX 35 pont
+
+**KRITIKUS:** Légy kritikus és objektív! A magas pontszámot KI KELL ÉRDEMELNI.
+
+---
+
+## KRITÉRIUMONKÉNTI PONTOZÁSI ÚTMUTATÓ
+
+### 1. MEGKÜLÖNBÖZTETHETŐSÉG (max 20 pont)
+18-20: Ikonikus, összetéveszthetetlen - RITKA!
+14-17: Egyedi, erős brand-személyiség
+9-13: Felismerhető, de vannak hasonlók
+5-8: Generikus kategória-klisé
+0-4: Stock-szerű, sablonos
+
+### 2. EGYSZERŰSÉG (max 18 pont) – KRITIKUS!
+16-18: Max 2 elem, 1 szín - RITKA!
+12-15: 3 elem, 2 szín, tiszta struktúra
+7-11: 4-5 elem, zsúfoltabb de érthető
+3-6: Illusztráció-szintű komplexitás
+0-2: Kaotikus részletáradat
+
+LEVONÁSOK: Gradiens = MAX 11, 4+ szín = MAX 9, Körbeírt szöveg + komplex kép = MAX 7
+
+### 3. ALKALMAZHATÓSÁG (max 15 pont)
+14-15: Bármilyen méretben tökéletes - RITKA!
+10-13: Minimális kompromisszummal skálázható
+6-9: Módosítás kell kis mérethez
+3-5: Csak nagy méretben működik
+0-2: Egyetlen használatra korlátozott
+
+### 4. EMLÉKEZETESSÉG (max 15 pont)
+14-15: Egyetlen pillantás, azonnal bevésődik - RITKA!
+10-13: Megjegyezhető, van vizuális horog
+6-9: Átlagos, elmegy mellette a szem
+3-5: Jellegtelen, könnyen felejthető
+0-2: Nyomot sem hagy
+
+### 5. IDŐTÁLLÓSÁG (max 12 pont)
+11-12: 20+ évig változatlanul működne - RITKA!
+8-10: 10-15 évig stabil
+4-7: 5-10 év, utána frissítés kell
+0-3: Már most datált
+
+### 6. UNIVERZALITÁS (max 10 pont)
+9-10: Kulturálisan semleges, globálisan működik
+7-8: Széles körben működik
+4-6: Egyes kultúrákban kérdéses
+0-3: Erősen kulturálisan kötött
+
+### 7. LÁTHATÓSÁG (max 10 pont)
+9-10: Kiváló kontraszt, távolról is működik
+7-8: Jó láthatóság normál körülmények közt
+4-6: Bizonyos helyzetben problémás
+0-3: Gyakran elvész a környezetében
+
+---
+
+[Feladat]
+A logó leírása az image_description mezőben található. Értékeld a Brandguide 100 pontos rendszerével!
+
+KRITIKUS: A szempontok tömbben MIND A 7 szempont KÖTELEZŐ! Ne hagyd ki egyiket sem: megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag.`;
+}
+
+/**
+ * Build summary+details query for kb-extract API (parallel call 2/2)
+ * Tartalmazza: Peti stílus, összefoglaló, színek, tipográfia, vizuális nyelv
+ */
+export function buildSummaryDetailsExtractQuery(): string {
+  return `${PETI_STYLE_BLOCK}
+
+## ÖSSZEFOGLALÓ KÉSZÍTÉSE – "Peti mentori értékelés"
+
+Írj 3-5 mondatos ŐSZINTE, személyes hangú értékelést a logóról (max 600 karakter).
+Úgy írj, mintha egy tapasztalt branding mentor mondaná el a véleményét egy barátságos konzultáción.
+
+### STÍLUSJEGYEK az összefoglalóhoz:
+- **Rögtön a lényegre térj** – az első mondat MINDIG a konkrét logóról szóljon, ne legyen általános bevezető
+- **Rövid, lendületes mondatok**: "A titok? Nincs benne felesleges elem." / "Őszintén? Ez fejlesztésre szorul."
+- **Kérdés-válasz ritmus**: "De működik? Igen, mert..."  / "A kérdés az, hogy elég-e ez?"
+- **Hétköznapi analógiák**: Hasonlítsd hétköznapi dolgokhoz, ne design-zsargonhoz
+- **Félkövér kiemelés** a legfontosabb megállapításnál (markdown **félkövér**)
+- **Gondolatjeles megtörés**: "Nem rossz – de lehetne sokkal jobb."
+
+### KERÜLENDŐ az összefoglalóban:
+- "Fantasztikus", "briliáns", "tökéletes" – túl lelkes szavak
+- "Innovatív", "dinamikus", "komplex megoldás" – üres buzzwordök
+- Sablonos nyitás – TILOS: "Nézzük, mi a helyzet...", "Ez a logó egy...", "Ami elsőre szembetűnik..." – minden elemzés más nyitómondattal kezdődjön!
+- Passzív szerkezetek ("megfigyelhető, hogy...") – aktív, közvetlen hangnem
+
+Erősségek és fejlesztendő területek: max 3-3 db, RÖVID 2-5 szavas bullet-ek.
+
+## RÉSZLETES ELEMZÉS
+
+### SZÍNPALETTA
+- Harmónia: A színek hogyan működnek együtt?
+- Pszichológia: Milyen érzéseket közvetítenek?
+- Technikai: RGB/CMYK kompatibilitás
+- Javaslatok: 2 konkrét javaslat
+
+### TIPOGRÁFIA
+- Karakter: A betűtípus személyisége
+- Olvashatóság: Különböző méretekben hogyan működik?
+- Javaslatok: 2 konkrét javaslat
+
+### VIZUÁLIS NYELV
+- Formák: Milyen formavilágot használ?
+- Elemek: Az ikon/szimbólum erőssége
+- Stílusegység: Az elemek összhangja
+- Javaslatok: 2 konkrét javaslat
+
+---
+
+[Feladat]
+A logó leírása az image_description mezőben található. Készítsd el az összefoglalót (osszegzes, erossegek, fejlesztendo) és a részletes elemzést (szinek, tipografia, vizualisNyelv)!
+
+FONTOS: Az összefoglaló (osszegzes) legyen Peti mentori stílusú – közvetlen, őszinte, barátságos hangú, mintha személyesen mondaná el a véleményét.`;
+}
+
 /**
  * Build full analysis query for kb-extract API (single call for scoring + summary + details)
+ * @deprecated Use buildScoringExtractQuery() + buildSummaryDetailsExtractQuery() parallel calls instead
  *
  * FONTOS: A visionDescription NEM kerül bele a query-be, mert az image_description
  * paraméterként külön megy a kb-extract API-nak. Ezzel elkerüljük a duplikációt

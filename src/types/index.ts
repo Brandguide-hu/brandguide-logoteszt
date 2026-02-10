@@ -10,31 +10,41 @@ export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed';
 // Láthatóság
 export type Visibility = 'private' | 'pending_approval' | 'public' | 'rejected';
 
-// Kategóriák
+// Kategóriák (v0.91: 16 iparág, ábécé sorrendben)
 export type Category =
+  | 'auto_transport'
+  | 'fashion'
+  | 'health_beauty'
+  | 'food_agriculture'
+  | 'construction_realestate'
+  | 'manufacturing'
+  | 'retail_webshop'
+  | 'creative_media'
+  | 'nonprofit'
+  | 'education_training'
+  | 'finance_insurance'
+  | 'sport_fitness'
+  | 'accommodation_tourism'
   | 'tech'
   | 'hospitality'
-  | 'health_beauty'
-  | 'construction_realestate'
-  | 'retail'
-  | 'services'
-  | 'creative_media'
-  | 'education'
-  | 'manufacturing'
-  | 'nonprofit'
   | 'other';
 
 export const CATEGORIES: Record<Category, string> = {
+  auto_transport: 'Autó & Szállítás',
+  fashion: 'Divat & Ruházat',
+  health_beauty: 'Egészség & Szépség',
+  food_agriculture: 'Élelmiszer & Mezőgazdaság',
+  construction_realestate: 'Építőipar & Ingatlan',
+  manufacturing: 'Gyártás & Ipar',
+  retail_webshop: 'Kereskedelem & Webshop',
+  creative_media: 'Kreatív & Média',
+  nonprofit: 'Non-profit & Civil',
+  education_training: 'Oktatás & Képzés',
+  finance_insurance: 'Pénzügy & Biztosítás',
+  sport_fitness: 'Sport & Fitness',
+  accommodation_tourism: 'Szállás & Turizmus',
   tech: 'Technológia & IT',
   hospitality: 'Vendéglátás',
-  health_beauty: 'Egészség & Szépség',
-  construction_realestate: 'Építőipar & Ingatlan',
-  retail: 'Kereskedelem',
-  services: 'Szolgáltatás',
-  creative_media: 'Kreatív & Média',
-  education: 'Oktatás',
-  manufacturing: 'Gyártás & Ipar',
-  nonprofit: 'Non-profit & Civil',
   other: 'Egyéb',
 };
 
@@ -229,7 +239,7 @@ export interface AnalysisRecord {
   test_level: TestLevel;
 }
 
-// Supabase tábla típus (v0.9)
+// Supabase tábla típus (v0.91)
 export interface AnalysisRow {
   id: string;
   user_id: string;
@@ -238,8 +248,8 @@ export interface AnalysisRow {
   visibility: Visibility;
   rejection_reason: string | null;
   logo_name: string;
-  creator_name: string;
-  category: Category;
+  creator_name: string | null;         // v0.91: nullable (fizetősnél opcionális)
+  category: Category | null;           // v0.91: nullable (fizetősnél opcionális)
   logo_original_path: string | null;
   logo_thumbnail_path: string | null;
   logo_base64: string | null;
@@ -248,6 +258,7 @@ export interface AnalysisRow {
   is_weekly_winner: boolean;
   weekly_winner_date: string | null;
   stripe_payment_intent_id: string | null;
+  stripe_checkout_session_id: string | null;  // v0.91: Stripe Checkout Session ID
   stripe_amount: number | null;
   created_at: string;
   updated_at: string;
@@ -255,15 +266,77 @@ export interface AnalysisRow {
   deleted_at: string | null;
 }
 
-// Profile típus
+// Account eredete
+export type CreatedVia = 'direct' | 'stripe';
+
+// Profile típus (v0.91)
 export interface Profile {
   id: string;
   email: string;
-  name: string;
+  name: string | null;                 // v0.91: nullable (Stripe-ból jövő usereknél)
   is_admin: boolean;
   is_email_verified: boolean;
   created_at: string;
   updated_at: string;
   last_free_analysis_at: string | null;
   last_free_analysis_ip: string | null;
+  created_via: CreatedVia;             // v0.91: account eredete
+}
+
+// Ideiglenes elemzés adatok (Stripe fizetés előtt)
+export interface PendingAnalysis {
+  id: string;
+  session_id: string;                  // Cookie-alapú anonymous session
+  tier: Tier;
+  logo_temp_path: string;              // Supabase Storage temp path
+  logo_thumbnail_temp_path: string | null;
+  logo_name: string;
+  creator_name: string | null;
+  category: Category | null;
+  email: string | null;                // Megadott email (ha nem volt bejelentkezve)
+  user_id: string | null;              // Ha be volt jelentkezve
+  created_at: string;
+  expires_at: string;                  // 24h TTL
+}
+
+// Feltöltési funnel event
+export type UploadEventType =
+  | 'page_view'
+  | 'tier_selected'
+  | 'logo_selected'
+  | 'form_filled'
+  | 'submit_clicked'
+  | 'auth_started'
+  | 'stripe_redirect'
+  | 'completed'
+  | 'abandoned';
+
+export interface UploadEvent {
+  id: string;
+  session_id: string;
+  event_type: UploadEventType;
+  tier: Tier | null;
+  has_logo: boolean;
+  has_email: boolean;
+  referrer: string | null;
+  user_agent: string | null;
+  ip_hash: string | null;
+  created_at: string;
+}
+
+// Admin művelet típusok
+export type AdminActionType =
+  | 'approve_analysis'
+  | 'reject_analysis'
+  | 'select_weekly_winner'
+  | 'delete_user'
+  | 'restore_user';
+
+export interface AdminAction {
+  id: string;
+  admin_id: string;
+  action_type: AdminActionType;
+  target_id: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
 }

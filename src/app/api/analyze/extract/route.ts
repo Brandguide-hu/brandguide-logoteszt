@@ -2,10 +2,13 @@
  * Logo Analyzer - Step 2: KB-Extract + Save
  *
  * kb-extract API hívás structured output-tal (scoring + summary + details),
- * majd Supabase mentés. Plain JSON response (nem SSE).
+ * majd Supabase mentés. SSE stream data event heartbeat-tel.
+ *
+ * FONTOS: Netlify gateway SSE comment-eket (: heartbeat) NEM tekinti
+ * adatforgalomnak → idle timeout. Ezért data event-eket használunk.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { AnalysisResult, ColorAnalysis, TypographyAnalysis, VisualLanguageAnalysis, CriteriaScore } from '@/types';
 import {
@@ -14,32 +17,48 @@ import {
   KBExtractSource,
   ERROR_MESSAGES,
 } from '@/lib/brandguide-api';
-import { buildFullAnalysisQuery, KB_EXTRACT_FULL_SCHEMA, getRatingFromScore } from '@/lib/prompts-v2';
+import {
+  buildScoringExtractQuery,
+  buildSummaryDetailsExtractQuery,
+  KB_EXTRACT_SCORING_SCHEMA,
+  KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
+  getRatingFromScore,
+} from '@/lib/prompts-v2';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface KBExtractSzempontItem {
-  nev: string;
+interface SzempontItem {
   pont: number;
   maxPont: number;
   indoklas: string;
   javaslatok: string[];
 }
 
-interface KBExtractAnalysisDataRaw {
-  scoring: {
-    osszpontszam: number;
-    logotipus: 'klasszikus_logo' | 'kampany_badge' | 'illusztracio_jellegu';
-    hiresLogo: {
-      ismert: boolean;
-      marka: string;
-      tervezo: string;
-      kontextus: string;
-    };
-    szempontok: KBExtractSzempontItem[];
+interface KBExtractScoringRaw {
+  osszpontszam: number;
+  logotipus: 'klasszikus_logo' | 'kampany_badge' | 'illusztracio_jellegu';
+  hiresLogo: {
+    ismert: boolean;
+    marka: string;
+    tervezo: string;
+    kontextus: string;
   };
+  megkulonboztethetoseg: SzempontItem;
+  egyszeruseg: SzempontItem;
+  alkalmazhatosag: SzempontItem;
+  emlekezetesseg: SzempontItem;
+  idotallosag: SzempontItem;
+  univerzalitas: SzempontItem;
+  lathatosag: SzempontItem;
+}
+
+interface KBExtractScoringData {
+  scoring: KBExtractScoringRaw;
+}
+
+interface KBExtractSummaryDetailsData {
   summary: {
     osszegzes: string;
     erossegek: string[];
@@ -66,7 +85,7 @@ interface SzempontokMap {
 // HELPERS
 // ============================================================================
 
-const SZEMPONT_ORDER: (keyof SzempontokMap)[] = [
+const SZEMPONT_KEYS: (keyof SzempontokMap)[] = [
   'megkulonboztethetoseg', 'egyszeruseg', 'alkalmazhatosag',
   'emlekezetesseg', 'idotallosag', 'univerzalitas', 'lathatosag'
 ];
@@ -81,67 +100,28 @@ const MAX_VALUES: Record<string, number> = {
   lathatosag: 10,
 };
 
-function normalizeSzempontName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-}
-
-const SZEMPONT_ALIASES: Record<string, keyof SzempontokMap> = {};
-for (const key of SZEMPONT_ORDER) {
-  SZEMPONT_ALIASES[key] = key;
-  SZEMPONT_ALIASES[key.slice(0, 6)] = key;
-}
-SZEMPONT_ALIASES['idotallo'] = 'idotallosag';
-
-function resolveKey(nev: string): keyof SzempontokMap | null {
-  const normalized = normalizeSzempontName(nev);
-  if (SZEMPONT_ALIASES[normalized]) return SZEMPONT_ALIASES[normalized];
-  const prefix = normalized.slice(0, 6);
-  if (SZEMPONT_ALIASES[prefix]) return SZEMPONT_ALIASES[prefix];
-  for (const key of SZEMPONT_ORDER) {
-    if (normalized.startsWith(key.slice(0, 5))) return key;
-  }
-  return null;
-}
-
-function szempontokArrayToMap(items: KBExtractSzempontItem[]): SzempontokMap {
+/**
+ * Named scoring response-ból SzempontokMap készítése.
+ * A schema required mezőkkel kikényszeríti mind a 7-et.
+ */
+function scoringToSzempontokMap(scoring: KBExtractScoringRaw): SzempontokMap {
   const map = {} as SzempontokMap;
-
-  for (const item of items) {
-    const key = resolveKey(item.nev);
-    if (key && !map[key]) {
+  for (const key of SZEMPONT_KEYS) {
+    const item = scoring[key];
+    if (item) {
       map[key] = {
         pont: item.pont,
         maxPont: item.maxPont,
-        indoklas: item.indoklas,
+        indoklas: item.indoklas || '',
         javaslatok: Array.isArray(item.javaslatok) ? item.javaslatok : [],
       };
-    } else if (!key) {
-      console.warn(`[VALIDATE] Unknown szempont: "${item.nev}" (${normalizeSzempontName(item.nev)})`);
     }
   }
-
-  for (let i = 0; i < SZEMPONT_ORDER.length; i++) {
-    const key = SZEMPONT_ORDER[i];
-    if (!map[key] && items[i]) {
-      console.log(`[VALIDATE] Positional fallback for ${key} (got: "${items[i].nev}")`);
-      map[key] = {
-        pont: items[i].pont,
-        maxPont: items[i].maxPont,
-        indoklas: items[i].indoklas,
-        javaslatok: Array.isArray(items[i].javaslatok) ? items[i].javaslatok : [],
-      };
-    }
-  }
-
   return map;
 }
 
 function calculateTotalScore(szempontok: SzempontokMap): number {
-  return SZEMPONT_ORDER.reduce((sum, key) => sum + (szempontok[key]?.pont || 0), 0);
+  return SZEMPONT_KEYS.reduce((sum, key) => sum + (szempontok[key]?.pont || 0), 0);
 }
 
 function clampSzempontok(szempontok: SzempontokMap): SzempontokMap {
@@ -165,7 +145,7 @@ function clampSzempontok(szempontok: SzempontokMap): SzempontokMap {
 }
 
 // ============================================================================
-// MAIN HANDLER - Plain JSON (no SSE streaming)
+// MAIN HANDLER - SSE with data event heartbeats
 // ============================================================================
 
 export async function POST(request: NextRequest) {
@@ -176,122 +156,189 @@ export async function POST(request: NextRequest) {
   };
 
   if (!visionDescription) {
-    return NextResponse.json({ error: 'Vision leírás megadása kötelező' }, { status: 400 });
+    return new Response(
+      JSON.stringify({ error: 'Vision leírás megadása kötelező' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   if (!logo) {
-    return NextResponse.json({ error: 'Logó megadása kötelező' }, { status: 400 });
-  }
-
-  try {
-    // ========================================
-    // KB-EXTRACT: Scoring + Summary + Details
-    // ========================================
-    const analysisQuery = buildFullAnalysisQuery();
-    console.log('[EXTRACT] Query length:', analysisQuery.length);
-
-    const kbResponse = await queryKBExtract<KBExtractAnalysisDataRaw>(
-      analysisQuery,
-      visionDescription,
-      KB_EXTRACT_FULL_SCHEMA,
-      'best_effort',
-      { max_sources: 5, language: 'hu' }
+    return new Response(
+      JSON.stringify({ error: 'Logó megadása kötelező' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
-
-    const rawData = kbResponse.data;
-    const sources = kbResponse.sources || [];
-    const szempontokMap = szempontokArrayToMap(rawData.scoring.szempontok);
-
-    console.log('[EXTRACT] Tokens:', kbResponse.meta?.tokens_used);
-    console.log('[EXTRACT] Szempontok:', rawData.scoring.szempontok?.length);
-
-    // Check for missing szempontok
-    const missingKeys = SZEMPONT_ORDER.filter(key => !szempontokMap[key]);
-    if (missingKeys.length > 0) {
-      console.error(`[EXTRACT] Missing: ${missingKeys.join(', ')}`);
-      console.error(`[EXTRACT] Raw names: ${rawData.scoring.szempontok?.map(s => s.nev).join(', ')}`);
-      return NextResponse.json(
-        { error: `Hiányos elemzés: ${missingKeys.join(', ')} hiányzik. Kérlek próbáld újra.` },
-        { status: 500 }
-      );
-    }
-
-    // ========================================
-    // VALIDATION + BUILD RESULT
-    // ========================================
-    const clampedSzempontok = clampSzempontok(szempontokMap);
-    const osszpontszam = calculateTotalScore(clampedSzempontok);
-    const minosites = getRatingFromScore(osszpontszam);
-
-    const result: AnalysisResult & {
-      sources?: KBExtractSource[];
-      hiresLogo?: KBExtractAnalysisDataRaw['scoring']['hiresLogo'];
-      logoTipus?: string;
-    } = {
-      id: '',
-      osszpontszam,
-      minosites,
-      szempontok: clampedSzempontok,
-      osszegzes: rawData.summary.osszegzes || '',
-      erossegek: Array.isArray(rawData.summary.erossegek) ? rawData.summary.erossegek.filter(e => e && e.length > 0) : [],
-      fejlesztendo: Array.isArray(rawData.summary.fejlesztendo) ? rawData.summary.fejlesztendo.filter(f => f && f.length > 0) : [],
-      szinek: {
-        harmonia: rawData.details.szinek?.harmonia || '',
-        pszichologia: rawData.details.szinek?.pszichologia || '',
-        technikai: rawData.details.szinek?.technikai || '',
-        javaslatok: Array.isArray(rawData.details.szinek?.javaslatok) ? rawData.details.szinek.javaslatok : [],
-      },
-      tipografia: {
-        karakter: rawData.details.tipografia?.karakter || '',
-        olvashatosag: rawData.details.tipografia?.olvashatosag || '',
-        javaslatok: Array.isArray(rawData.details.tipografia?.javaslatok) ? rawData.details.tipografia.javaslatok : [],
-      },
-      vizualisNyelv: {
-        formak: rawData.details.vizualisNyelv?.formak || '',
-        elemek: rawData.details.vizualisNyelv?.elemek || '',
-        stilusEgyseg: rawData.details.vizualisNyelv?.stilusEgyseg || '',
-        javaslatok: Array.isArray(rawData.details.vizualisNyelv?.javaslatok) ? rawData.details.vizualisNyelv.javaslatok : [],
-      },
-      createdAt: new Date().toISOString(),
-      testLevel: 'detailed',
-      hiresLogo: rawData.scoring.hiresLogo,
-      logoTipus: rawData.scoring.logotipus,
-    };
-
-    if (sources.length > 0) {
-      result.sources = sources;
-    }
-
-    // ========================================
-    // SAVE TO SUPABASE
-    // ========================================
-    const { data: insertedData, error: dbError } = await getSupabaseAdmin()
-      .from('analyses')
-      .insert({
-        result: result as unknown as Record<string, unknown>,
-        logo_base64: logo,
-        test_level: 'detailed',
-      })
-      .select('id')
-      .single();
-
-    if (dbError) {
-      console.error('[EXTRACT] DB error:', JSON.stringify(dbError));
-      return NextResponse.json({ error: ERROR_MESSAGES.DB_SAVE_ERROR }, { status: 500 });
-    }
-
-    result.id = insertedData.id;
-    console.log('[EXTRACT] Saved:', insertedData.id);
-
-    return NextResponse.json({ id: insertedData.id, result });
-
-  } catch (error) {
-    console.error('[EXTRACT] Error:', error);
-    const message = error instanceof BrandguideAPIError
-      ? error.message
-      : error instanceof Error
-        ? error.message
-        : 'Ismeretlen hiba';
-    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  const encoder = new TextEncoder();
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+
+  const sendEvent = async (event: string, data: unknown) => {
+    try {
+      await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    } catch (e) {
+      console.error('[EXTRACT] sendEvent failed:', e);
+    }
+  };
+
+  // Heartbeat using DATA events (not SSE comments) to keep Netlify gateway alive
+  let heartbeatRunning = true;
+  let heartbeatResolve: (() => void) | null = null;
+  const heartbeatStopped = new Promise<void>(r => { heartbeatResolve = r; });
+  const heartbeatLoop = async () => {
+    while (heartbeatRunning) {
+      try {
+        await writer.write(encoder.encode(`event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`));
+      } catch {
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    heartbeatResolve?.();
+  };
+  heartbeatLoop();
+
+  const responsePromise = (async () => {
+    try {
+      await sendEvent('status', { message: 'Elemzés folyamatban...', phase: 'analysis' });
+
+      const scoringQuery = buildScoringExtractQuery();
+      const summaryDetailsQuery = buildSummaryDetailsExtractQuery();
+      console.log('[EXTRACT] Scoring query length:', scoringQuery.length);
+      console.log('[EXTRACT] Summary+Details query length:', summaryDetailsQuery.length);
+
+      // Két párhuzamos kb-extract hívás: scoring (named objects) + summary+details
+      const [scoringResponse, summaryDetailsResponse] = await Promise.all([
+        queryKBExtract<KBExtractScoringData>(
+          scoringQuery,
+          visionDescription,
+          KB_EXTRACT_SCORING_SCHEMA,
+          'best_effort',
+          { max_sources: 5, language: 'hu' }
+        ),
+        queryKBExtract<KBExtractSummaryDetailsData>(
+          summaryDetailsQuery,
+          visionDescription,
+          KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
+          'best_effort',
+          { max_sources: 5, language: 'hu' }
+        ),
+      ]);
+
+      const rawScoring = scoringResponse.data.scoring;
+      const rawSummary = summaryDetailsResponse.data.summary;
+      const rawDetails = summaryDetailsResponse.data.details;
+      const sources = [
+        ...(scoringResponse.sources || []),
+        ...(summaryDetailsResponse.sources || []),
+      ];
+      const szempontokMap = scoringToSzempontokMap(rawScoring);
+
+      console.log('[EXTRACT] Scoring tokens:', scoringResponse.meta?.tokens_used);
+      console.log('[EXTRACT] Summary+Details tokens:', summaryDetailsResponse.meta?.tokens_used);
+
+      const missingKeys = SZEMPONT_KEYS.filter(key => !szempontokMap[key]);
+      if (missingKeys.length > 0) {
+        console.error(`[EXTRACT] Missing szempontok: ${missingKeys.join(', ')}`);
+        throw new Error(`Hiányos elemzés: ${missingKeys.join(', ')} hiányzik. Kérlek próbáld újra.`);
+      }
+      console.log('[EXTRACT] All 7 szempontok OK');
+
+      await sendEvent('status', { message: 'Eredmények feldolgozása...', phase: 'processing' });
+
+      const clampedSzempontok = clampSzempontok(szempontokMap);
+      const osszpontszam = calculateTotalScore(clampedSzempontok);
+      const minosites = getRatingFromScore(osszpontszam);
+
+      const result: AnalysisResult & {
+        sources?: KBExtractSource[];
+        hiresLogo?: KBExtractScoringRaw['hiresLogo'];
+        logoTipus?: string;
+      } = {
+        id: '',
+        osszpontszam,
+        minosites,
+        szempontok: clampedSzempontok,
+        osszegzes: rawSummary.osszegzes || '',
+        erossegek: Array.isArray(rawSummary.erossegek) ? rawSummary.erossegek.filter(e => e && e.length > 0) : [],
+        fejlesztendo: Array.isArray(rawSummary.fejlesztendo) ? rawSummary.fejlesztendo.filter(f => f && f.length > 0) : [],
+        szinek: {
+          harmonia: rawDetails.szinek?.harmonia || '',
+          pszichologia: rawDetails.szinek?.pszichologia || '',
+          technikai: rawDetails.szinek?.technikai || '',
+          javaslatok: Array.isArray(rawDetails.szinek?.javaslatok) ? rawDetails.szinek.javaslatok : [],
+        },
+        tipografia: {
+          karakter: rawDetails.tipografia?.karakter || '',
+          olvashatosag: rawDetails.tipografia?.olvashatosag || '',
+          javaslatok: Array.isArray(rawDetails.tipografia?.javaslatok) ? rawDetails.tipografia.javaslatok : [],
+        },
+        vizualisNyelv: {
+          formak: rawDetails.vizualisNyelv?.formak || '',
+          elemek: rawDetails.vizualisNyelv?.elemek || '',
+          stilusEgyseg: rawDetails.vizualisNyelv?.stilusEgyseg || '',
+          javaslatok: Array.isArray(rawDetails.vizualisNyelv?.javaslatok) ? rawDetails.vizualisNyelv.javaslatok : [],
+        },
+        createdAt: new Date().toISOString(),
+        testLevel: 'detailed',
+        hiresLogo: rawScoring.hiresLogo,
+        logoTipus: rawScoring.logotipus,
+      };
+
+      if (sources.length > 0) {
+        result.sources = sources;
+      }
+
+      await sendEvent('status', { message: 'Mentés adatbázisba...', phase: 'saving' });
+
+      console.log('[EXTRACT] Saving to DB... result size:', JSON.stringify(result).length, 'logo size:', logo?.length || 0);
+
+      const { data: insertedData, error: dbError } = await getSupabaseAdmin()
+        .from('analyses')
+        .insert({
+          result: result as unknown as Record<string, unknown>,
+          logo_base64: logo,
+          test_level: 'detailed',
+          visibility: 'public',
+          status: 'completed',
+        })
+        .select('id')
+        .single();
+
+      if (dbError) {
+        console.error('[EXTRACT] DB error:', JSON.stringify(dbError));
+        console.error('[EXTRACT] DB error details:', dbError.message, dbError.code, dbError.hint);
+        throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+      }
+
+      result.id = insertedData.id;
+      console.log('[EXTRACT] Saved:', insertedData.id);
+
+      heartbeatRunning = false;
+      await heartbeatStopped;
+      // Csak az id-t küldjük — a frontend redirect-el az eredmény oldalra
+      await sendEvent('complete', { id: insertedData.id });
+      console.log('[EXTRACT] Complete event sent');
+      await writer.close();
+
+    } catch (error) {
+      heartbeatRunning = false;
+      await heartbeatStopped;
+      console.error('[EXTRACT] Error:', error);
+      await sendEvent('error', {
+        message: error instanceof Error ? error.message : 'Ismeretlen hiba'
+      });
+      try { await writer.close(); } catch { /* ignore */ }
+    }
+  })();
+
+  responsePromise.catch(console.error);
+
+  return new Response(stream.readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

@@ -32,15 +32,30 @@ interface AdminAnalysis {
 interface AdminUser {
   id: string;
   display_name: string | null;
+  name: string | null;
   email: string | null;
   is_admin: boolean;
   is_email_verified: boolean;
+  created_via: string | null;
   created_at: string;
   analysisCount: number;
   paidCount: number;
 }
 
-type Tab = 'dashboard' | 'pending' | 'all' | 'users';
+interface FunnelStep {
+  step: string;
+  count: number;
+  conversionRate: number;
+}
+
+interface FunnelData {
+  days: number;
+  uniqueSessions: number;
+  abandoned: number;
+  funnel: FunnelStep[];
+}
+
+type Tab = 'dashboard' | 'pending' | 'all' | 'users' | 'funnel';
 
 const TRUSTED_TOKEN_KEY = 'logolab_admin_trusted';
 
@@ -52,6 +67,8 @@ export default function AdminPage() {
   const [pendingItems, setPendingItems] = useState<AdminAnalysis[]>([]);
   const [allItems, setAllItems] = useState<AdminAnalysis[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [funnelData, setFunnelData] = useState<FunnelData | null>(null);
+  const [funnelDays, setFunnelDays] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -149,11 +166,12 @@ export default function AdminPage() {
   const fetchData = async () => {
     const headers = await getAuthHeaders();
 
-    const [statsRes, pendingRes, allRes, usersRes] = await Promise.all([
+    const [statsRes, pendingRes, allRes, usersRes, funnelRes] = await Promise.all([
       fetch('/api/admin?action=dashboard', { headers }),
       fetch('/api/admin?action=pending', { headers }),
       fetch('/api/admin?action=all', { headers }),
       fetch('/api/admin?action=users', { headers }),
+      fetch(`/api/admin/funnel?days=${funnelDays}`, { headers }),
     ]);
 
     if (statsRes.ok) {
@@ -171,6 +189,10 @@ export default function AdminPage() {
     if (usersRes.ok) {
       const data = await usersRes.json();
       setUsers(data.users || []);
+    }
+    if (funnelRes.ok) {
+      const data = await funnelRes.json();
+      setFunnelData(data);
     }
     setIsLoading(false);
   };
@@ -301,6 +323,7 @@ export default function AdminPage() {
     { key: 'pending', label: 'Jóváhagyás', badge: pendingItems.length },
     { key: 'all', label: 'Összes elemzés' },
     { key: 'users', label: 'Felhasználók', badge: users.length },
+    { key: 'funnel', label: 'Funnel' },
   ];
 
   return (
@@ -516,6 +539,7 @@ export default function AdminPage() {
                       <tr>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Név</th>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Email</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Forrás</th>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Szerep</th>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Email ok</th>
                         <th className="text-right px-4 py-3 text-gray-500 font-medium">Elemzések</th>
@@ -527,9 +551,16 @@ export default function AdminPage() {
                       {users.map(u => (
                         <tr key={u.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">
-                            {u.display_name || '-'}
+                            {u.name || u.display_name || '-'}
                           </td>
                           <td className="px-4 py-3 text-gray-500">{u.email || '-'}</td>
+                          <td className="px-4 py-3">
+                            {u.created_via === 'stripe' ? (
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">Stripe</span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">Direct</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">
                             {u.is_admin ? (
                               <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">Admin</span>
@@ -561,6 +592,106 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Funnel tab */}
+          {tab === 'funnel' && (
+            <div>
+              {/* Period selector */}
+              <div className="flex gap-2 mb-6">
+                {[7, 14, 30].map(d => (
+                  <button
+                    key={d}
+                    onClick={async () => {
+                      setFunnelDays(d);
+                      const headers = await getAuthHeaders();
+                      const res = await fetch(`/api/admin/funnel?days=${d}`, { headers });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setFunnelData(data);
+                      }
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                      funnelDays === d
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {d} nap
+                  </button>
+                ))}
+              </div>
+
+              {funnelData ? (
+                <div className="space-y-6">
+                  {/* Summary */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5">
+                      <div className="text-3xl font-bold text-gray-900">{funnelData.uniqueSessions}</div>
+                      <div className="text-sm text-gray-500 mt-1">Egyedi session</div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-5">
+                      <div className="text-3xl font-bold text-green-600">
+                        {funnelData.funnel.find(f => f.step === 'completed')?.count || 0}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">Befejezett</div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-5">
+                      <div className="text-3xl font-bold text-red-500">{funnelData.abandoned}</div>
+                      <div className="text-sm text-gray-500 mt-1">Megszakított</div>
+                    </div>
+                  </div>
+
+                  {/* Funnel steps */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="font-semibold text-gray-900 mb-4">Feltöltési funnel</h3>
+                    <div className="space-y-3">
+                      {funnelData.funnel.map((step, index) => {
+                        const maxCount = funnelData.funnel[0]?.count || 1;
+                        const barWidth = Math.max((step.count / maxCount) * 100, 2);
+                        const stepLabels: Record<string, string> = {
+                          page_view: 'Oldal megtekintése',
+                          tier_selected: 'Csomag kiválasztva',
+                          logo_selected: 'Logó kiválasztva',
+                          form_filled: 'Form kitöltve',
+                          submit_clicked: 'Küldés gomb',
+                          auth_started: 'Auth indítva',
+                          stripe_redirect: 'Stripe átirányítás',
+                          completed: 'Befejezve',
+                        };
+
+                        return (
+                          <div key={step.step} className="flex items-center gap-4">
+                            <div className="w-40 text-sm text-gray-600 flex-shrink-0">
+                              {stepLabels[step.step] || step.step}
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  index === funnelData.funnel.length - 1
+                                    ? 'bg-green-500'
+                                    : 'bg-blue-500'
+                                }`}
+                                style={{ width: `${barWidth}%` }}
+                              />
+                              <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-gray-700">
+                                {step.count}
+                              </span>
+                            </div>
+                            <div className="w-16 text-right text-sm font-medium text-gray-500">
+                              {index > 0 ? `${step.conversionRate}%` : ''}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-12 text-center">
+                  <p className="text-gray-500">Funnel adatok betöltése...</p>
                 </div>
               )}
             </div>

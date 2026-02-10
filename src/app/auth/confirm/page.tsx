@@ -29,7 +29,13 @@ export default function ConfirmPage() {
       handled = true;
       await ensureProfile(user);
       setStatus('success');
-      setTimeout(() => router.push('/dashboard'), 1500);
+
+      // Check for redirect from URL params
+      const url = new URL(window.location.href);
+      const customRedirect = url.searchParams.get('redirect');
+      const analysisId = url.searchParams.get('analysis');
+      const redirectUrl = customRedirect || (analysisId ? `/dashboard/${analysisId}` : '/dashboard');
+      setTimeout(() => router.push(redirectUrl), 1500);
     };
 
     // Listen for auth state changes — handles hash fragment automatically

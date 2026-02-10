@@ -81,8 +81,8 @@ export function DropZone({ onFileSelect, file }: DropZoneProps) {
                     className={cx(
                         "flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200",
                         isDragging
-                            ? "border-brand-500 bg-brand-50"
-                            : "border-secondary bg-secondary hover:bg-tertiary hover:border-tertiary"
+                            ? "border-yellow-500 bg-yellow-50"
+                            : "border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300"
                     )}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -92,30 +92,30 @@ export function DropZone({ onFileSelect, file }: DropZoneProps) {
                         <div
                             className={cx(
                                 "w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors",
-                                isDragging ? "bg-brand-500" : "bg-tertiary"
+                                isDragging ? "bg-yellow-500" : "bg-gray-100"
                             )}
                         >
                             <Upload01
-                                className={cx("w-8 h-8 transition-colors", isDragging ? "text-white" : "text-quaternary")}
+                                className={cx("w-8 h-8 transition-colors", isDragging ? "text-white" : "text-gray-500")}
                             />
                         </div>
-                        <p className="mb-2 text-lg font-medium text-primary">
+                        <p className="mb-2 text-lg font-medium text-gray-900">
                             {isDragging ? "Engedd el a fájlt!" : "Húzd ide a logódat"}
                         </p>
-                        <p className="text-sm text-secondary">
-                            vagy <span className="text-brand-600 font-medium">kattints a tallózáshoz</span>
+                        <p className="text-sm text-gray-700">
+                            vagy <span className="text-yellow-600 font-medium">kattints a tallózáshoz</span>
                         </p>
-                        <p className="mt-2 text-xs text-tertiary">PNG, JPG, WebP (max 5MB)</p>
+                        <p className="mt-2 text-xs text-gray-500">PNG, JPG, WebP (max 5MB)</p>
                     </div>
                     <input
                         type="file"
-                        className="hidden"
+                        className="sr-only"
                         accept="image/png,image/jpeg,image/jpg,image/webp"
                         onChange={handleInputChange}
                     />
                 </label>
             ) : (
-                <div className="relative w-full h-64 bg-secondary rounded-xl border border-secondary overflow-hidden">
+                <div className="relative w-full h-64 bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                     {preview && (
                         <div className="absolute inset-0 flex items-center justify-center p-4">
                             <img src={preview} alt="Logó előnézet" className="max-w-full max-h-full object-contain" />
@@ -123,14 +123,14 @@ export function DropZone({ onFileSelect, file }: DropZoneProps) {
                     )}
                     <button
                         onClick={handleRemove}
-                        className="absolute top-3 right-3 w-8 h-8 bg-error-500 text-white rounded-full flex items-center justify-center hover:bg-error-600 transition-colors shadow-lg"
+                        className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg"
                     >
                         <XClose className="w-5 h-5" />
                     </button>
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center gap-2 bg-primary/90 backdrop-blur-sm rounded-lg px-3 py-2">
-                        <Image01 className="w-4 h-4 text-quaternary" />
-                        <span className="text-sm text-primary truncate">{file.name}</span>
-                        <span className="text-xs text-tertiary ml-auto">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2">
+                        <Image01 className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-900 truncate">{file.name}</span>
+                        <span className="text-xs text-gray-500 ml-auto">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
                 </div>
             )}

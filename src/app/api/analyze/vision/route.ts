@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   const heartbeatLoop = async () => {
     while (heartbeatRunning) {
       try {
-        await writer.write(encoder.encode(': heartbeat\n\n'));
+        await writer.write(encoder.encode(`event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`));
       } catch {
         break;
       }

@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
   if (action === 'users') {
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, email, is_admin, is_email_verified, created_at')
+      .select('id, display_name, name, email, is_admin, is_email_verified, created_via, created_at')
       .order('created_at', { ascending: false })
       .limit(200);
 
