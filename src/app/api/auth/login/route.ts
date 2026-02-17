@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 
     // Generate magic link using admin API
     const { data, error } = await supabase.auth.admin.generateLink({

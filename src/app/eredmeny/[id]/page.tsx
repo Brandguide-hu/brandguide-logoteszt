@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
 import {
     RadarChart,
@@ -41,7 +42,20 @@ export default function ResultPage() {
     const [displayScore, setDisplayScore] = useState(0);
     const scoreAnimated = useRef(false);
     const heroLogoRef = useRef<HTMLDivElement>(null);
-    const [heroLogoVisible, setHeroLogoVisible] = useState(true);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [logoName, setLogoName] = useState<string | null>(null);
+    const [creatorName, setCreatorName] = useState<string | null>(null);
+    const [category, setCategory] = useState<string | null>(null);
+    const [tier, setTier] = useState<string | null>(null);
+    const [createdAt, setCreatedAt] = useState<string | null>(null);
+
+    // Check auth state for breadcrumb
+    useEffect(() => {
+        const supabase = getSupabaseBrowserClient();
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setIsLoggedIn(!!session);
+        });
+    }, []);
 
     // Animated count-up for score
     const animateScore = useCallback((target: number) => {
@@ -89,6 +103,11 @@ export default function ResultPage() {
 
                 setResult(resultData);
                 setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+                setLogoName(data.logo_name || null);
+                setCreatorName(data.creator_name || null);
+                setCategory(data.category || null);
+                setTier(data.tier || null);
+                setCreatedAt(data.created_at || null);
                 animateScore(resultData.osszpontszam);
             } catch (err) {
                 console.error("Fetch error:", err);
@@ -121,18 +140,6 @@ export default function ResultPage() {
         }, 5000);
         return () => clearInterval(interval);
     }, [loading, error, result, id, animateScore]);
-
-    // Track hero logo visibility for sidebar
-    useEffect(() => {
-        const el = heroLogoRef.current;
-        if (!el) return;
-        const observer = new IntersectionObserver(
-            ([entry]) => setHeroLogoVisible(entry.isIntersecting),
-            { threshold: 0.1 }
-        );
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [loading]);
 
     // Loading state - show skeleton UI
     if (loading) {
@@ -200,13 +207,23 @@ export default function ResultPage() {
             <header className="border-b border-gray-100 bg-white">
                 <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between">
-                        <Link
-                            href="/elemzes/uj"
-                            className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
-                        >
-                            <ArrowLeft className="size-4" />
-                            Új teszt
-                        </Link>
+                        {isLoggedIn ? (
+                            <button
+                                onClick={() => router.push('/dashboard')}
+                                className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
+                            >
+                                <ArrowLeft className="size-4" />
+                                Vissza a dashboardra
+                            </button>
+                        ) : (
+                            <Link
+                                href="/elemzes/uj"
+                                className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
+                            >
+                                <ArrowLeft className="size-4" />
+                                Új teszt
+                            </Link>
+                        )}
                         <Link href="/">
                             <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
                         </Link>
@@ -276,7 +293,7 @@ export default function ResultPage() {
                                     <ul className="space-y-2">
                                         {result.erossegek.map((item, index) => (
                                             <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
-                                                <span className="mt-1.5 text-[8px] text-emerald-500">●</span>
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
                                                 {item}
                                             </li>
                                         ))}
@@ -295,7 +312,7 @@ export default function ResultPage() {
                                     <ul className="space-y-2">
                                         {result.fejlesztendo.map((item, index) => (
                                             <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
-                                                <span className="mt-1.5 text-[8px] text-amber-500">●</span>
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
                                                 {item}
                                             </li>
                                         ))}
@@ -319,9 +336,30 @@ export default function ResultPage() {
                             <h2 className="mb-4 text-xl font-light text-gray-900">
                                 Részletes értékelés
                             </h2>
+
+                            {/* Mobile dropdown */}
+                            <div className="mb-4 sm:hidden">
+                                <select
+                                    value={activeTab}
+                                    onChange={(e) => setActiveTab(e.target.value as CriteriaName)}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                >
+                                    {Object.entries(result.szempontok).map(([key, value]) => {
+                                        const criteriaKey = key as CriteriaName;
+                                        const meta = CRITERIA_META[criteriaKey];
+                                        if (!meta) return null;
+                                        return (
+                                            <option key={key} value={key}>
+                                                {meta.displayName} — {value.pont}/{meta.maxScore}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
                             <div className="flex gap-4">
-                                {/* Left side - Tab list */}
-                                <div className="w-64 shrink-0 space-y-1">
+                                {/* Left side - Tab list (hidden on mobile) */}
+                                <div className="hidden sm:block w-64 shrink-0 space-y-1">
                                     {Object.entries(result.szempontok).map(([key, value]) => {
                                         const criteriaKey = key as CriteriaName;
                                         const meta = CRITERIA_META[criteriaKey];
@@ -336,19 +374,19 @@ export default function ResultPage() {
                                             <button
                                                 key={key}
                                                 onClick={() => setActiveTab(criteriaKey)}
-                                                className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${
+                                                className={`group flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${
                                                     isActive
                                                         ? "border border-gray-100 bg-white shadow-sm"
-                                                        : "hover:bg-gray-50"
+                                                        : "hover:bg-white hover:shadow-sm hover:border hover:border-gray-100"
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <IconComp className={`size-4 ${isActive ? "text-gray-900" : "text-gray-400"}`} />
-                                                    <span className={`text-sm font-medium ${isActive ? "text-gray-900" : "text-gray-500"}`}>
+                                                    <IconComp className={`size-4 transition-colors ${isActive ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"}`} />
+                                                    <span className={`text-sm font-medium transition-colors ${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-700"}`}>
                                                         {meta.displayName}
                                                     </span>
                                                 </div>
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreColor}`}>
+                                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold transition-all ${scoreColor}`}>
                                                     {value.pont}/{meta.maxScore}
                                                 </span>
                                             </button>
@@ -399,7 +437,7 @@ export default function ResultPage() {
                                                         <ul className="space-y-2">
                                                             {value.javaslatok.map((javaslat, index) => (
                                                                 <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
-                                                                    <span className="mt-2 text-[8px] text-amber-500">●</span>
+                                                                    <span className="shrink-0 mt-[9px] text-[8px] leading-none text-amber-500">●</span>
                                                                     {javaslat}
                                                                 </li>
                                                             ))}
@@ -441,7 +479,7 @@ export default function ResultPage() {
                                                 <ul className="space-y-2">
                                                     {result.szinek.javaslatok.map((javaslat, index) => (
                                                         <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
-                                                            <span className="mt-1.5 text-[8px] text-purple-400">●</span>
+                                                            <span className="shrink-0 mt-[7px] text-[8px] leading-none text-purple-400">●</span>
                                                             {javaslat}
                                                         </li>
                                                     ))}
@@ -474,7 +512,7 @@ export default function ResultPage() {
                                                 <ul className="space-y-2">
                                                     {result.tipografia.javaslatok.map((javaslat, index) => (
                                                         <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
-                                                            <span className="mt-1.5 text-[8px] text-blue-400">●</span>
+                                                            <span className="shrink-0 mt-[7px] text-[8px] leading-none text-blue-400">●</span>
                                                             {javaslat}
                                                         </li>
                                                     ))}
@@ -538,7 +576,11 @@ export default function ResultPage() {
                             logoUrl={logoUrl}
                             score={result.osszpontszam}
                             rating={result.minosites}
-                            showLogo={!heroLogoVisible}
+                            logoName={logoName}
+                            creatorName={creatorName}
+                            category={category}
+                            tier={tier}
+                            createdAt={createdAt}
                         />
                     </div>
                 </div>

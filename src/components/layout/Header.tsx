@@ -7,9 +7,10 @@ import { useAuthModal } from '@/providers/auth-modal-provider';
 import { cx } from '@/utils/cx';
 
 const NAV_ITEMS = [
-  { label: 'Logo elemzés', href: '/elemzes/uj', authRequired: false },
+  { label: 'Így működik', href: '/igy-mukodik', authRequired: false },
+  { label: 'Logó elemzés', href: '/elemzes/uj', authRequired: false },
   { label: 'Árak', href: '/arak', authRequired: false },
-  { label: 'Logo galéria', href: '/galeria', authRequired: false },
+  { label: 'Logó galéria', href: '/galeria', authRequired: false },
   { label: 'Dashboard', href: '/dashboard', authRequired: true },
 ];
 

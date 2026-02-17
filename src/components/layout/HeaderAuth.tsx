@@ -11,7 +11,7 @@ import { useAuthModal } from '@/providers/auth-modal-provider';
  */
 export function HeaderAuth() {
   const router = useRouter();
-  const { user, profile, isLoading, signOut } = useAuth();
+  const { user, profile, isLoading, signOut, isAdmin } = useAuth();
   const { openAuthModal } = useAuthModal();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -64,6 +64,15 @@ export function HeaderAuth() {
             >
               Dashboard
             </button>
+            {(isAdmin || profile?.is_admin) && (
+              <button
+                onClick={() => { router.push('/admin'); setMenuOpen(false); }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center gap-2"
+              >
+                <span className="inline-block size-1.5 rounded-full bg-[#FFF012]" />
+                Admin
+              </button>
+            )}
             <button
               onClick={handleSignOut}
               className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"

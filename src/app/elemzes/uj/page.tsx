@@ -262,7 +262,7 @@ function NewAnalysisContent() {
   const getButtonLabel = () => {
     if (isSubmitting) return 'Feldolgozás...';
     if (!selectedTier) return 'Válassz csomagot';
-    if (selectedTier === 'free') return 'Ingyenes elemzés indítása';
+    if (selectedTier === 'free') return 'Light csomag — elemzés indítása';
     return `Fizetés és elemzés indítása — ${TIER_INFO[selectedTier].price}`;
   };
 

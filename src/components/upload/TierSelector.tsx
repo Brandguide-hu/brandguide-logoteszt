@@ -10,6 +10,9 @@ interface TierSelectorProps {
   isLoggedIn: boolean;
 }
 
+// LAUNCH FLAG: Light csomag induláskor nem elérhető
+const LIGHT_COMING_SOON = true;
+
 export function TierSelector({ selectedTier, onSelect, canUseFree, isLoggedIn }: TierSelectorProps) {
   const isFreeLimitReached = canUseFree === false;
 
@@ -18,7 +21,8 @@ export function TierSelector({ selectedTier, onSelect, canUseFree, isLoggedIn }:
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Válassz csomagot</h2>
       <div className="grid gap-4">
         {(Object.entries(TIER_INFO) as [Tier, typeof TIER_INFO.free][]).map(([tier, info]) => {
-          const isDisabled = tier === 'free' && isFreeLimitReached;
+          const isComingSoon = tier === 'free' && LIGHT_COMING_SOON;
+          const isDisabled = isComingSoon || (tier === 'free' && isFreeLimitReached);
           const isSelected = selectedTier === tier;
           const isRecommended = tier === 'paid';
 
@@ -43,13 +47,27 @@ export function TierSelector({ selectedTier, onSelect, canUseFree, isLoggedIn }:
                 </span>
               )}
 
+              {/* Coming soon badge */}
+              {isComingSoon && (
+                <span className="absolute -top-2.5 right-4 px-2.5 py-0.5 bg-gray-200 text-gray-600 text-xs font-semibold rounded-full">
+                  Hamarosan
+                </span>
+              )}
+
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-gray-900">{info.label}</span>
                 <span className="text-sm font-medium text-gray-600">{info.price}</span>
               </div>
 
+              {/* Coming soon message */}
+              {isComingSoon && (
+                <p className="text-xs text-gray-400 mb-2">
+                  Az ingyenes csomag hamarosan elérhető lesz.
+                </p>
+              )}
+
               {/* Free limit message */}
-              {isDisabled && (
+              {!isComingSoon && isDisabled && (
                 <p className="text-xs text-orange-600 mb-2">
                   Ma már felhasználtad az ingyenes elemzésed. Holnap újra elérhető!
                 </p>

@@ -34,6 +34,11 @@ export function Footer() {
                   Logo galéria
                 </Link>
               </li>
+              <li>
+                <Link href="/igy-mukodik" className="text-sm hover:text-white transition-colors">
+                  Így működik az elemzés
+                </Link>
+              </li>
             </ul>
           </div>
 

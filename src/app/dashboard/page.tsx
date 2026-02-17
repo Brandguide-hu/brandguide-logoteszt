@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [analyses, setAnalyses] = useState<AnalysisSummary[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -52,6 +53,23 @@ export default function DashboardPage() {
     setIsLoadingData(false);
   };
 
+  const handleDelete = async (e: React.MouseEvent, analysisId: string) => {
+    e.stopPropagation();
+    if (!confirm('Biztosan törölni szeretnéd ezt az elemzést?')) return;
+    setDeletingId(analysisId);
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await (supabase.from('analyses') as any)
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', analysisId)
+      .eq('user_id', user!.id);
+    if (error) {
+      alert('Hiba történt a törlés során.');
+    } else {
+      setAnalyses(prev => prev.filter(a => a.id !== analysisId));
+    }
+    setDeletingId(null);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -74,9 +92,9 @@ export default function DashboardPage() {
 
   const getTierLabel = (tier: string) => {
     switch (tier) {
-      case 'free': return 'Ingyenes';
-      case 'paid': return 'Zárt elemzés';
-      case 'consultation': return 'Konzultáció';
+      case 'free': return 'Light';
+      case 'paid': return 'Max';
+      case 'consultation': return 'Ultra';
       default: return tier;
     }
   };
@@ -126,37 +144,82 @@ export default function DashboardPage() {
             {analyses.map(analysis => {
               const badge = getStatusBadge(analysis.status, analysis.visibility);
               const score = analysis.result?.osszpontszam;
+              const isCompleted = analysis.status === 'completed';
+              const isPending = analysis.status === 'pending' || analysis.status === 'processing';
+              const isPaid = analysis.tier === 'paid' || analysis.tier === 'consultation';
 
               return (
-                <button
+                <div
                   key={analysis.id}
+                  className="w-full bg-white rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer"
                   onClick={() => router.push(`/dashboard/${analysis.id}`)}
-                  className="w-full bg-white rounded-xl p-5 hover:shadow-md transition-shadow text-left flex items-center gap-4"
                 >
-                  {/* Score */}
-                  <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    {score ? (
-                      <span className="text-lg font-bold text-gray-900">{score}</span>
-                    ) : (
-                      <span className="text-sm text-gray-400">--</span>
+                  <div className="flex items-center gap-4">
+                    {/* Score */}
+                    <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                      {score ? (
+                        <span className="text-lg font-bold text-gray-900">{score}</span>
+                      ) : (
+                        <span className="text-sm text-gray-400">--</span>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 truncate">
+                        {analysis.logo_name || 'Névtelen logó'}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {new Date(analysis.created_at).toLocaleDateString('hu-HU')} · {getTierLabel(analysis.tier)}
+                      </p>
+                    </div>
+
+                    {/* Status badge */}
+                    <span className={`hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
+                      {badge.label}
+                    </span>
+                  </div>
+
+                  {/* Action row */}
+                  <div className="mt-3 flex items-center gap-2 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                    {isCompleted && (
+                      <button
+                        onClick={() => router.push(`/eredmeny/${analysis.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Elemzés megtekintése
+                      </button>
+                    )}
+                    {isPending && (
+                      <button
+                        onClick={() => router.push(`/elemzes/feldolgozas/${analysis.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Elemzés indítása
+                      </button>
+                    )}
+                    <div className="flex-1" />
+                    {isPaid && (
+                      <button
+                        onClick={(e) => handleDelete(e, analysis.id)}
+                        disabled={deletingId === analysis.id}
+                        className="flex items-center gap-1 px-3 py-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        {deletingId === analysis.id ? 'Törlés...' : 'Törlés'}
+                      </button>
                     )}
                   </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">
-                      {analysis.logo_name || 'Névtelen logó'}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {new Date(analysis.created_at).toLocaleDateString('hu-HU')} \u2022 {getTierLabel(analysis.tier)}
-                    </p>
-                  </div>
-
-                  {/* Status badge */}
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
-                    {badge.label}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>

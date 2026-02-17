@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Érvénytelen csomag' }, { status: 400 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 
     const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
             currency: 'huf',
             product_data: {
               name: tier === 'paid'
-                ? 'LogoLab Zárt elemzés'
-                : 'LogoLab Zárt elemzés + Konzultáció',
+                ? 'LogoLab Max csomag'
+                : 'LogoLab Ultra csomag',
               description: tier === 'paid'
                 ? 'Részletes logó elemzés privát eredménnyel'
                 : 'Részletes logó elemzés + 20 perces szakértői konzultáció',

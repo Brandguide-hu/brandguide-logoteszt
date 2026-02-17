@@ -58,27 +58,38 @@ const phaseProgress: Record<Phase, number> = {
   vision: 15,
   analysis: 30,  // Az API ezt küldi
   brandguide_analysis: 30,
-  comparing: 50,
-  processing: 70,
-  visual: 85,
-  saving: 95,
+  comparing: 70,
+  processing: 85,
+  visual: 92,
+  saving: 97,
   complete: 100,
 };
 
 const phaseLabels: Record<Phase, string> = {
   start: 'Indítás',
-  vision: 'Kép feldolgozás',
-  analysis: 'Pontozás',  // Az API ezt küldi
+  vision: 'Kép elemzés',
+  analysis: 'Pontozás',
   brandguide_analysis: 'Pontozás',
-  comparing: 'Színek',
-  processing: 'Tipográfia',
-  visual: 'Vizuális nyelv',
+  comparing: 'Feldolgozás',
+  processing: 'Részletek',
+  visual: 'Összegzés',
   saving: 'Mentés',
   complete: 'Kész',
 };
 
-// Phase steps for the progress indicator
-const phaseSteps: Phase[] = ['vision', 'brandguide_analysis', 'comparing', 'processing', 'visual', 'saving'];
+// Vizuális lépések — 5 lépés amit a user lát (ezek a "fake" közbülső állomások)
+const phaseSteps: Phase[] = ['vision', 'brandguide_analysis', 'comparing', 'processing', 'saving'];
+
+// A hosszú várakozás (30–70%) alatt megjelenő al-fázis üzenetek
+const ANALYSIS_SUBSTEPS = [
+  { pct: 30, label: 'Megkülönböztethetőség vizsgálata...' },
+  { pct: 36, label: 'Egyszerűség elemzése...' },
+  { pct: 42, label: 'Alkalmazhatóság tesztelése...' },
+  { pct: 48, label: 'Emlékezetesség felmérése...' },
+  { pct: 54, label: 'Időtállóság értékelése...' },
+  { pct: 60, label: 'Univerzalitás ellenőrzése...' },
+  { pct: 65, label: 'Láthatóság vizsgálata...' },
+];
 
 function FeldolgozasContent() {
   const params = useParams();
@@ -94,6 +105,47 @@ function FeldolgozasContent() {
   const [streamingText, setStreamingText] = useState('');
   const [cyclingMessage, setCyclingMessage] = useState('');
   const [displayedMessage, setDisplayedMessage] = useState('');
+
+  // Debug state
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [phaseStartTime, setPhaseStartTime] = useState<Record<string, number>>({});
+  const addDebugLog = (msg: string) => {
+    const ts = new Date().toISOString().slice(11, 23);
+    console.log(`[DEBUG ${ts}] ${msg}`);
+    setDebugLogs(prev => [...prev.slice(-99), `[${ts}] ${msg}`]);
+  };
+
+  // Animált progress: a 30–70% közötti hosszú várakozásnál lassan auto-növekszik
+  const [animatedProgress, setAnimatedProgress] = useState(0);
+  const [animatedSubLabel, setAnimatedSubLabel] = useState('');
+
+  useEffect(() => {
+    const baseProgress = phaseProgress[streamingPhase] ?? 0;
+    // Ha elértük a valós phase progress-t, egyből ugrik
+    if (streamingPhase !== 'analysis' && streamingPhase !== 'brandguide_analysis') {
+      setAnimatedProgress(baseProgress);
+      return;
+    }
+
+    // analysis fázisban: 30-tól lassan 68%-ig auto-növekszik (~75mp alatt)
+    // 75mp / (68-30) = ~2s / 1%
+    setAnimatedProgress(30);
+    let current = 30;
+    const interval = setInterval(() => {
+      if (current < 68) {
+        current += 1;
+        setAnimatedProgress(current);
+        // Keressük a legközelebbi substep üzenetet
+        const step = [...ANALYSIS_SUBSTEPS].reverse().find(s => current >= s.pct);
+        if (step) setAnimatedSubLabel(step.label);
+      } else {
+        clearInterval(interval);
+      }
+    }, 2000); // 2 másodpercenként +1% → 38 lépés = ~76mp
+
+    return () => clearInterval(interval);
+  }, [streamingPhase]);
 
   // Cycle through loading messages based on current phase
   useEffect(() => {
@@ -149,8 +201,44 @@ function FeldolgozasContent() {
     return () => clearInterval(typeInterval);
   }, [cyclingMessage]);
 
+  // Polling fallback: ha az SSE stream lezárul 'complete' event nélkül,
+  // a backend function tovább fut a háttérben → pollingolunk amíg kész
+  const startPollingFallback = useCallback(() => {
+    addDebugLog('Polling fallback mód: SSE megszakadt, DB-t pollozom...');
+    setStreamingPhase('brandguide_analysis');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const pollRes = await fetch(`/api/result/${analysisId}`);
+        if (pollRes.ok) {
+          const pollData = await pollRes.json();
+          addDebugLog(`Poll: status=${pollData.status}`);
+          if (pollData.status === 'completed') {
+            clearInterval(pollInterval);
+            addDebugLog('Poll: KÉSZ! Redirect...');
+            setStreamingPhase('complete');
+            setTimeout(() => {
+              router.push(`/eredmeny/${analysisId}`);
+            }, 500);
+          }
+        }
+      } catch {
+        // hálózati hiba, következő iterációban újra
+      }
+    }, 3000);
+
+    // Max 5 percig pollingolunk (100 * 3s)
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      addDebugLog('Poll timeout: 5 perc eltelt, megállok.');
+    }, 300000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisId, router]);
+
   // SSE Stream kezelés - a régi teszt oldal logikája
   const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string) => {
+    addDebugLog(`SSE indítás: analysisId=${analysisId}, mediaType=${mediaType}`);
+
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -161,6 +249,8 @@ function FeldolgozasContent() {
         analysisId, // Így a backend UPDATE-eli a meglévő rekordot
       }),
     });
+
+    addDebugLog(`HTTP válasz: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       const contentType = response.headers.get('content-type');
@@ -176,68 +266,117 @@ function FeldolgozasContent() {
       throw new Error('Nem sikerült olvasni a választ');
     }
 
+    addDebugLog('SSE stream megnyílt, olvasás kezdődik...');
+
     const decoder = new TextDecoder();
     let buffer = '';
+    let lastEventTime = Date.now();
+    let completed = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // Watchdog: ha 65 másodpercig nem jön semmi (még heartbeat sem), polling fallback
+    const watchdogTimeout = setTimeout(() => {
+      const elapsed = Math.round((Date.now() - lastEventTime) / 1000);
+      addDebugLog(`WATCHDOG: ${elapsed}s óta nem jött adat! Polling fallback-re váltok.`);
+      reader.cancel();
+    }, 65000);
 
-      buffer += decoder.decode(value, { stream: true });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          addDebugLog('SSE stream lezárva (done=true)');
+          break;
+        }
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        lastEventTime = Date.now();
+        buffer += decoder.decode(value, { stream: true });
 
-      let currentEvent = '';
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7);
-        } else if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          try {
-            const parsed = JSON.parse(data);
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-            switch (currentEvent) {
-              case 'status':
-                setStreamingPhase(parsed.phase as Phase);
-                break;
-              case 'chunk':
-                setStreamingText((prev) => prev + parsed.text);
-                break;
-              case 'complete':
-                setStreamingPhase('complete');
-                // Redirect az eredmény oldalra
-                setTimeout(() => {
-                  router.push(`/eredmeny/${analysisId}`);
-                }, 800);
-                return;
-              case 'error':
-                throw new Error(parsed.message || 'Hiba történt');
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith(': ')) {
+            // heartbeat comment sor
+            addDebugLog(`Heartbeat érkezett`);
+          } else if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+
+              switch (currentEvent) {
+                case 'status':
+                  addDebugLog(`Phase: ${parsed.phase} | "${parsed.message}"`);
+                  setStreamingPhase(parsed.phase as Phase);
+                  setPhaseStartTime(prev => ({ ...prev, [parsed.phase]: Date.now() }));
+                  break;
+                case 'chunk':
+                  setStreamingText((prev) => prev + parsed.text);
+                  break;
+                case 'debug':
+                  addDebugLog(`[backend] ${parsed.message}`);
+                  break;
+                case 'complete':
+                  addDebugLog(`KÉSZ! id=${parsed.id}`);
+                  clearTimeout(watchdogTimeout);
+                  completed = true;
+                  setStreamingPhase('complete');
+                  // Redirect az eredmény oldalra
+                  setTimeout(() => {
+                    router.push(`/eredmeny/${analysisId}`);
+                  }, 800);
+                  return;
+                case 'error':
+                  addDebugLog(`HIBA: ${parsed.message}`);
+                  clearTimeout(watchdogTimeout);
+                  throw new Error(parsed.message || 'Hiba történt');
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== 'Hiba történt') {
+                addDebugLog(`JSON parse hiba: ${parseErr.message} | raw: ${data.slice(0, 80)}`);
+              } else {
+                throw parseErr;
+              }
             }
-          } catch {
-            // JSON parse error, skip
           }
         }
       }
+    } finally {
+      clearTimeout(watchdogTimeout);
     }
-  }, [analysisId, router]);
+
+    // Ha idáig eljutottunk: a stream lezárult complete event nélkül.
+    // A Netlify lezárta a HTTP kapcsolatot, de a function tovább fut.
+    // Váltunk polling módra.
+    if (!completed) {
+      startPollingFallback();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisId, router, startPollingFallback]);
 
   // Analysis adatok lekérése és elemzés indítása
   const startAnalysis = useCallback(async () => {
     if (isStarted) return;
     setIsStarted(true);
 
+    addDebugLog(`startAnalysis: id=${analysisId}`);
+
     try {
       // Először lekérjük az analysis adatokat a DB-ből
       const infoRes = await fetch(`/api/result/${analysisId}`);
+      addDebugLog(`DB lekérés: ${infoRes.status}`);
       if (!infoRes.ok) {
         throw new Error('Az elemzés nem található');
       }
 
       const analysisData = await infoRes.json();
+      addDebugLog(`DB status: ${analysisData.status}, logo_base64: ${analysisData.logo_base64 ? `${String(analysisData.logo_base64).length} kar` : 'NINCS'}, result keys: ${analysisData.result ? Object.keys(analysisData.result).length : 0}`);
 
       // Ha már completed, egyből redirect
       if (analysisData.status === 'completed' && analysisData.result && Object.keys(analysisData.result).length > 0) {
+        addDebugLog('Már kész, redirect...');
         router.push(`/eredmeny/${analysisId}`);
         return;
       }
@@ -250,6 +389,7 @@ function FeldolgozasContent() {
 
       // Ha processing ÉS VAN eredmény (valóban fut), akkor polling amíg kész lesz
       if (analysisData.status === 'processing' && analysisData.result && Object.keys(analysisData.result).length > 0) {
+        addDebugLog('Már fut (processing+result), polling mód...');
         setStreamingPhase('brandguide_analysis');
 
         const pollInterval = setInterval(async () => {
@@ -279,16 +419,19 @@ function FeldolgozasContent() {
           else if (ext === 'webp') mediaType = 'image/webp';
         }
 
+        addDebugLog(`SSE mód: status=${analysisData.status}, mediaType=${mediaType}`);
         // SSE streaming elemzés indítása - mint a régi teszt oldalon
         await runAnalysisWithSSE(analysisData.logo_base64, mediaType);
         return;
       }
 
       // Ha nincs logo_base64, próbáljuk a start endpoint-ot (fallback)
+      addDebugLog(`Fallback: start endpoint, logo_base64 NINCS`);
       const startRes = await fetch(`/api/analysis/${analysisId}/start`, {
         method: 'POST',
       });
 
+      addDebugLog(`Start endpoint válasz: ${startRes.status}`);
       if (!startRes.ok) {
         const errorData = await startRes.json();
         throw new Error(errorData.error || 'Nem sikerült elindítani az elemzést');
@@ -322,8 +465,8 @@ function FeldolgozasContent() {
     startAnalysis();
   }, [startAnalysis]);
 
-  // Loading state
-  const currentProgress = phaseProgress[streamingPhase] ?? 0;
+  // Loading state — animált progress-t használunk a progress barhoz
+  const currentProgress = animatedProgress || (phaseProgress[streamingPhase] ?? 0);
   const currentLabel = phaseLabels[streamingPhase] ?? streamingPhase;
 
   // Error state
@@ -354,12 +497,12 @@ function FeldolgozasContent() {
   return (
     <div className="relative min-h-screen">
       {/* Background: Result page skeleton */}
-      <div className="pointer-events-none opacity-50">
+      <div className="pointer-events-none opacity-80">
         <ResultSkeleton />
       </div>
 
       {/* Overlay with dark card */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-[2px]">
         {/* Dark card container */}
         <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl mx-4">
           {/* SCORE Animation at top */}
@@ -382,18 +525,22 @@ function FeldolgozasContent() {
             </div>
           )}
 
-          {/* brandguideAI indicator */}
+          {/* brandguide SCORE indicator */}
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-gray-800 px-3 py-1">
             <Stars01 className="size-3.5 text-[#fff012]" />
-            <span className="text-xs font-medium text-gray-300">brandguideAI elemzés</span>
+            <span className="text-xs font-medium text-gray-300">brandguide SCORE</span>
           </div>
 
           {/* Status text with cycling message */}
           <div className="mb-6">
             {streamingPhase !== 'complete' && (
               <p className="h-6 text-lg font-medium text-white">
-                {displayedMessage}
-                {displayedMessage && <span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" />}
+                {(streamingPhase === 'analysis' || streamingPhase === 'brandguide_analysis') && animatedSubLabel
+                  ? <>{animatedSubLabel}<span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" /></>
+                  : displayedMessage
+                    ? <>{displayedMessage}<span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" /></>
+                    : null
+                }
               </p>
             )}
           </div>
@@ -415,7 +562,8 @@ function FeldolgozasContent() {
           {/* Phase steps - equal spacing with flex-1 */}
           <div className="flex justify-between">
             {phaseSteps.map((phase, index) => {
-              const isActive = streamingPhase === phase;
+              const isActive = streamingPhase === phase ||
+                (streamingPhase === 'analysis' && phase === 'brandguide_analysis');
               const stepProgress = phaseProgress[phase] ?? 0;
               const isComplete = currentProgress > stepProgress;
               const stepLabel = phaseLabels[phase] ?? phase;
@@ -453,8 +601,37 @@ function FeldolgozasContent() {
               </p>
             </div>
           )}
+
+          {/* Debug toggle button */}
+          <button
+            onClick={() => setShowDebug(prev => !prev)}
+            className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+          >
+            {showDebug ? '▲ debug elrejtése' : '▼ debug napló'}
+          </button>
         </div>
       </div>
+
+      {/* Debug panel - fixed bottom overlay */}
+      {showDebug && (
+        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-black/95 border-t border-gray-700 max-h-64 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+            <span className="text-xs font-mono font-bold text-green-400">DEBUG LOG — phase: {streamingPhase} ({currentProgress}%)</span>
+            <button onClick={() => setDebugLogs([])} className="text-[10px] text-gray-500 hover:text-gray-300">törlés</button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2">
+            {debugLogs.length === 0 ? (
+              <p className="text-xs text-gray-600 font-mono">Nincs napló még...</p>
+            ) : (
+              debugLogs.map((log, i) => (
+                <div key={i} className="text-[10px] font-mono text-green-300 leading-5 border-b border-gray-900 py-0.5">
+                  {log}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         @keyframes fadeIn {

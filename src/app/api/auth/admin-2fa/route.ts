@@ -77,11 +77,16 @@ export async function POST(req: NextRequest) {
 </body>
 </html>`.trim();
 
-  await sendEmail({
+  const emailResult = await sendEmail({
     to: user.email!,
     subject,
     html,
   });
+
+  if (!emailResult.success) {
+    console.error('[Admin 2FA] Email küldési hiba:', emailResult.error);
+    return NextResponse.json({ error: 'Email küldési hiba: ' + (emailResult.error || 'Ismeretlen hiba') }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true, message: 'A 2FA kód elküldve' });
 }

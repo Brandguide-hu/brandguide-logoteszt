@@ -50,7 +50,7 @@ export const CATEGORIES: Record<Category, string> = {
 
 export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto: number; features: string[] }> = {
   free: {
-    label: 'Ingyenes',
+    label: 'Light',
     price: '0 Ft',
     priceBrutto: 0,
     features: [
@@ -61,7 +61,7 @@ export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto
     ],
   },
   paid: {
-    label: 'Zárt elemzés',
+    label: 'Max',
     price: '1 990 Ft + ÁFA',
     priceBrutto: 2527,
     features: [
@@ -74,11 +74,11 @@ export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto
     ],
   },
   consultation: {
-    label: 'Zárt + Konzultáció',
+    label: 'Ultra',
     price: '24 990 Ft + ÁFA',
     priceBrutto: 31737,
     features: [
-      'Minden a Zárt elemzésből',
+      'Minden a Max csomagból',
       'PDF export',
       '20 perces szakértői konzultáció',
     ],

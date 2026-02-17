@@ -4,30 +4,24 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
 
-type AuthMode = 'login' | 'register';
-
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
 
-  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const redirectTo = searchParams.get('redirect') || '/dashboard';
 
-  // If already logged in, redirect (in useEffect to avoid render-time setState)
+  // If already logged in, redirect
   useEffect(() => {
     if (!authLoading && user) {
       router.replace(redirectTo);
     }
   }, [authLoading, user, redirectTo, router]);
 
-  // Show loading spinner while auth is initializing
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -36,7 +30,6 @@ function LoginContent() {
     );
   }
 
-  // Already logged in — show spinner while redirecting
   if (user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -51,50 +44,26 @@ function LoginContent() {
     setMessage(null);
 
     try {
-      if (mode === 'register') {
-        if (!acceptedTerms) {
-          setMessage({ type: 'error', text: 'Az ÁSZF elfogadása kötelező' });
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setMessage({ type: 'error', text: 'Ez az email nincs regisztrálva. Vedd fel a kapcsolatot az adminisztrátorral!' });
           setIsLoading(false);
           return;
         }
-
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setMessage({ type: 'error', text: data.error });
-          setIsLoading(false);
-          return;
-        }
-
-        router.push(`/auth/verify?email=${encodeURIComponent(email)}&mode=register`);
-      } else {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (res.status === 404) {
-            setMessage({ type: 'error', text: 'Ez az email nincs regisztrálva. Regisztrálj először!' });
-            setIsLoading(false);
-            return;
-          }
-          setMessage({ type: 'error', text: data.error });
-          setIsLoading(false);
-          return;
-        }
-
-        router.push(`/auth/verify?email=${encodeURIComponent(email)}&mode=login`);
+        setMessage({ type: 'error', text: data.error });
+        setIsLoading(false);
+        return;
       }
+
+      router.push(`/auth/verify?email=${encodeURIComponent(email)}&mode=login`);
     } catch {
       setMessage({ type: 'error', text: 'Hálózati hiba. Próbáld újra!' });
     } finally {
@@ -111,33 +80,7 @@ function LoginContent() {
             <div className="flex justify-center mb-2">
               <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
             </div>
-            <p className="text-gray-500 mt-2">
-              {mode === 'login' ? 'Jelentkezz be a fiókodba' : 'Hozz létre egy fiókot'}
-            </p>
-          </div>
-
-          {/* Tab switcher */}
-          <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-            <button
-              onClick={() => { setMode('login'); setMessage(null); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                mode === 'login'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Bejelentkezés
-            </button>
-            <button
-              onClick={() => { setMode('register'); setMessage(null); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                mode === 'register'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Regisztráció
-            </button>
+            <p className="text-gray-500 mt-2">Jelentkezz be a fiókodba</p>
           </div>
 
           {/* Message */}
@@ -155,24 +98,6 @@ function LoginContent() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'register' && (
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Név
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Teljes neved"
-                  required
-                  minLength={2}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
-                />
-              </div>
-            )}
-
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email cím
@@ -188,27 +113,6 @@ function LoginContent() {
               />
             </div>
 
-            {mode === 'register' && (
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={acceptedTerms}
-                  onChange={e => setAcceptedTerms(e.target.checked)}
-                  className="mt-1 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
-                />
-                <span className="text-sm text-gray-600">
-                  Elfogadom az{' '}
-                  <a href="/aszf" target="_blank" className="text-yellow-600 hover:underline">
-                    ÁSZF-et
-                  </a>{' '}
-                  és az{' '}
-                  <a href="/adatvedelem" target="_blank" className="text-yellow-600 hover:underline">
-                    Adatvédelmi tájékoztatót
-                  </a>
-                </span>
-              </label>
-            )}
-
             <button
               type="submit"
               disabled={isLoading}
@@ -222,19 +126,15 @@ function LoginContent() {
                   </svg>
                   Küldés...
                 </span>
-              ) : mode === 'login' ? (
-                'Bejelentkezési link küldése'
               ) : (
-                'Regisztráció'
+                'Bejelentkezési link küldése'
               )}
             </button>
           </form>
 
           {/* Info */}
           <p className="text-center text-xs text-gray-400 mt-6">
-            {mode === 'login'
-              ? 'Egy bejelentkezési linket küldünk az email címedre. Jelszó nem szükséges.'
-              : 'Egy megerősítő linket küldünk az email címedre.'}
+            Egy bejelentkezési linket küldünk az email címedre. Jelszó nem szükséges.
           </p>
         </div>
       </div>

@@ -15,11 +15,11 @@ export default function ConfirmPage() {
     let handled = false;
 
     const ensureProfile = async (user: { id: string; email?: string; user_metadata?: Record<string, unknown> }) => {
+      // is_admin szándékosan ki van hagyva — ne írja felül a meglévő admin jogot bejelentkezéskor
       await (supabase.from('profiles') as any).upsert({
         id: user.id,
         email: user.email?.toLowerCase() || '',
         name: (user.user_metadata?.name as string) || user.email?.split('@')[0] || '',
-        is_admin: false,
         is_email_verified: true,
       }, { onConflict: 'id' });
     };
@@ -33,8 +33,20 @@ export default function ConfirmPage() {
       // Check for redirect from URL params
       const url = new URL(window.location.href);
       const customRedirect = url.searchParams.get('redirect');
-      const analysisId = url.searchParams.get('analysis');
-      const redirectUrl = customRedirect || (analysisId ? `/dashboard/${analysisId}` : '/dashboard');
+      // 'pending' = lazy-register flow (ingyenes): pendingAnalysisId → streaming oldal
+      const pendingAnalysisId = url.searchParams.get('pending');
+      // 'analysis' = régi param (fallback)
+      const legacyAnalysisId = url.searchParams.get('analysis');
+
+      let redirectUrl = '/dashboard';
+      if (customRedirect) {
+        redirectUrl = customRedirect;
+      } else if (pendingAnalysisId) {
+        redirectUrl = `/elemzes/feldolgozas/${pendingAnalysisId}`;
+      } else if (legacyAnalysisId) {
+        redirectUrl = `/elemzes/feldolgozas/${legacyAnalysisId}`;
+      }
+
       setTimeout(() => router.push(redirectUrl), 1500);
     };
 
@@ -153,7 +165,7 @@ export default function ConfirmPage() {
                 </svg>
               </div>
               <h1 className="text-xl font-bold text-gray-900 mb-2">Sikeresen bejelentkeztél!</h1>
-              <p className="text-gray-500">Átirányítunk a dashboardra...</p>
+              <p className="text-gray-500">Átirányítunk...</p>
             </>
           )}
 

@@ -182,29 +182,13 @@ export default function AnalysisDetailPage() {
   const isFailed = analysis.status === 'failed';
   const isCompleted = analysis.status === 'completed';
 
-  // Processing state
-  if (isProcessing) {
+  // Processing state → redirect a streaming oldalra (ott van a progress bar és a polling)
+  if (isProcessing && !result) {
+    router.replace(`/elemzes/feldolgozas/${analysisId}`);
     return (
       <AppLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <div className="mb-6">
-              <div className="animate-spin h-12 w-12 border-4 border-yellow-400 border-t-transparent rounded-full mx-auto" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Elemzés folyamatban...</h2>
-            <p className="text-gray-500 mb-2">
-              A logód elemzése még tart. Ez általában 1-2 percet vesz igénybe.
-            </p>
-            <p className="text-sm text-gray-400">
-              {analysis.logo_name} &bull; {TIER_INFO[analysis.tier].label}
-            </p>
-            <button
-              onClick={() => fetchAnalysis()}
-              className="mt-6 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
-            >
-              Frissítés
-            </button>
-          </div>
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
         </div>
       </AppLayout>
     );
@@ -245,32 +229,13 @@ export default function AnalysisDetailPage() {
     );
   }
 
-  // Pending state - show start button
+  // Pending state → redirect a streaming oldalra (az indítja és figyeli az elemzést)
   if (analysis.status === 'pending' && !result) {
+    router.replace(`/elemzes/feldolgozas/${analysisId}`);
     return (
       <AppLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Elemzés indítása</h2>
-            <p className="text-gray-500 mb-2">
-              A logód feltöltése sikeres volt. Kattints az alábbi gombra az elemzés elindításához.
-            </p>
-            <p className="text-sm text-gray-400 mb-6">
-              {analysis.logo_name} &bull; {TIER_INFO[analysis.tier].label}
-            </p>
-            <button
-              onClick={handleStartAnalysis}
-              disabled={isStarting}
-              className="px-8 py-3 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {isStarting ? 'Indítás...' : 'Elemzés indítása'}
-            </button>
-          </div>
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
         </div>
       </AppLayout>
     );
@@ -468,7 +433,7 @@ export default function AnalysisDetailPage() {
                     Többet szeretnél tudni a logódról?
                   </h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    A Zárt elemzés tartalmazza a szöveges indoklást, szín- és tipográfia elemzést,
+                    A Max csomag tartalmazza a szöveges indoklást, szín- és tipográfia elemzést,
                     erősségek/fejlesztendő listáját és megosztható linket.
                   </p>
                   <button

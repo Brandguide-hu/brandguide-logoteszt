@@ -50,7 +50,7 @@ const DETAILED_FEATURES: Record<Tier, { included: string[]; excluded: string[] }
   },
   consultation: {
     included: [
-      'Minden a Zárt elemzésből',
+      'Minden a Max csomagból',
       'PDF export',
       '20 perces szakértői konzultáció',
       'Prioritásos feldolgozás',
@@ -151,7 +151,7 @@ export default function ArakPage() {
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                     }`}
                   >
-                    {key === 'free' ? 'Ingyenes elemzés' : 'Választás'}
+                    {key === 'free' ? 'Light — hamarosan' : key === 'paid' ? 'Max csomag' : 'Ultra csomag'}
                   </button>
                 </div>
               );

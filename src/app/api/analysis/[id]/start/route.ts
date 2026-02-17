@@ -84,7 +84,7 @@ export async function POST(
     .eq('id', analysisId);
 
   // Elemzés indítás háttérben
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 
   fetch(`${appUrl}/api/analyze`, {
     method: 'POST',

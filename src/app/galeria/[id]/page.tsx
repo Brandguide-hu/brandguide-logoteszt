@@ -506,7 +506,6 @@ export default function GaleriaDetailPage() {
                         logoUrl={logoUrl}
                         score={result.osszpontszam}
                         rating={result.minosites}
-                        showLogo={!heroLogoVisible}
                     />
                 </div>
             </div>

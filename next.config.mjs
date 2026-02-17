@@ -3,6 +3,20 @@ const nextConfig = {
     experimental: {
         optimizePackageImports: ["@untitledui/icons"],
     },
+    // CSP workaround - disable strict CSP for dynamic code
+    async headers() {
+        return [
+            {
+                source: '/:path*',
+                headers: [
+                    {
+                        key: 'Content-Security-Policy',
+                        value: "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self' https:;",
+                    },
+                ],
+            },
+        ];
+    },
 };
 
 export default nextConfig;

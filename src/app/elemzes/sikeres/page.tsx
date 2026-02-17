@@ -29,29 +29,11 @@ function SikeresContent() {
     }
   }, [sessionId]);
 
-  // Bejelentkezett user → polling és auto-redirect a feldolgozás oldalra
+  // Bejelentkezett user + analysisId megvan → azonnal redirect a streaming oldalra
   useEffect(() => {
     if (authLoading || !user || !analysisId || isRedirecting) return;
-
-    const checkStatus = async () => {
-      try {
-        const res = await fetch(`/api/result/${analysisId}`);
-        if (res.ok) {
-          // Az elemzés rekord létezik → redirect a feldolgozás oldalra (streaming loader)
-          setIsRedirecting(true);
-          router.push(`/elemzes/feldolgozas/${analysisId}`);
-        }
-      } catch {
-        // Még nem jött létre az analysis rekord, várunk
-      }
-    };
-
-    // Első check azonnal
-    checkStatus();
-
-    // Polling 3 másodpercenként
-    const interval = setInterval(checkStatus, 3000);
-    return () => clearInterval(interval);
+    setIsRedirecting(true);
+    router.push(`/elemzes/feldolgozas/${analysisId}`);
   }, [authLoading, user, analysisId, isRedirecting, router]);
 
   useEffect(() => {
@@ -126,7 +108,7 @@ function SikeresContent() {
     );
   }
 
-  // Nem bejelentkezett user → magic link várakozó
+  // Nem bejelentkezett user → magic link várakozó + közvetlen indítás gomb
   return (
     <AppLayout>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -143,45 +125,43 @@ function SikeresContent() {
               Fizetés sikeres!
             </h1>
 
-            {email && (
-              <p className="text-gray-500 mb-2">
-                Küldtünk egy linket a <strong className="text-gray-900">{email}</strong> címre.
-              </p>
+            <p className="text-2xl font-bold text-gray-900 mb-2">
+              Már nagyon közel vagy!
+            </p>
+            <p className="text-gray-500 mb-6">
+              Nyisd meg az elemzésedet, és indulhat az értékelés.
+            </p>
+
+            {/* CTA: ha már be tud lépni most → indítsa el direktbe */}
+            {analysisId && (
+              <a
+                href={`/elemzes/feldolgozas/${analysisId}`}
+                className="block w-full mb-6 py-3.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors"
+              >
+                Elemzés indítása most →
+              </a>
             )}
 
-            <p className="text-gray-500 mb-6">
-              Kattints a levélben kapott linkre a bejelentkezéshez és az eredményed megtekintéséhez.
-            </p>
-
-            {/* Processing info */}
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-              <div className="flex items-center justify-center gap-2 text-blue-700 text-sm font-medium">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Az elemzés a háttérben már fut!
-              </div>
-            </div>
-
-            {/* Spam warning */}
-            <p className="text-xs text-gray-400 mb-6">
-              Nem találod a levelet? Ellenőrizd a spam/promóciók mappát is.
-            </p>
+            {/* Email info - secondary */}
+            {email && (
+              <p className="text-xs text-gray-400 mb-3">
+                Linket is küldtünk a <strong className="text-gray-500">{email}</strong> címre.
+              </p>
+            )}
 
             {/* Resend button */}
             {email && (
               <button
                 onClick={handleResend}
                 disabled={resendCooldown > 0}
-                className={`text-sm font-medium transition-colors ${
+                className={`text-xs font-medium transition-colors ${
                   resendCooldown > 0
                     ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-600 hover:text-gray-900 cursor-pointer'
+                    : 'text-gray-400 hover:text-gray-600 cursor-pointer'
                 }`}
               >
                 {resendCooldown > 0
-                  ? `Újraküldés (${resendCooldown}mp)`
+                  ? `Link újraküldése (${resendCooldown}mp)`
                   : 'Link újraküldése'}
               </button>
             )}

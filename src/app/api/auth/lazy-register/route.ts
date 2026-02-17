@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = getSupabaseAdmin();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 
     // Check if user exists
     const { data: existingUsers } = await admin.auth.admin.listUsers();

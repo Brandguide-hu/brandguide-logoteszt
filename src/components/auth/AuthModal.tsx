@@ -1,35 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthModal } from '@/providers/auth-modal-provider';
 
-type AuthMode = 'login' | 'register';
-
 export function AuthModal() {
-  const router = useRouter();
-  const { isOpen, defaultTab, redirectAfterAuth, closeAuthModal } = useAuthModal();
+  const { isOpen, closeAuthModal } = useAuthModal();
 
-  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  // Sync tab with defaultTab when modal opens
+  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setMode(defaultTab);
       setEmail('');
-      setName('');
-      setAcceptedTerms(false);
       setMessage(null);
       setSubmitted(false);
       setIsLoading(false);
     }
-  }, [isOpen, defaultTab]);
+  }, [isOpen]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -51,51 +41,42 @@ export function AuthModal() {
     setMessage(null);
 
     try {
-      if (mode === 'register') {
-        if (!acceptedTerms) {
-          setMessage({ type: 'error', text: 'Az ÁSZF elfogadása kötelező' });
-          setIsLoading(false);
-          return;
-        }
+      // Unified login endpoint - creates user if doesn't exist
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
 
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name }),
-        });
+      const data = await res.json();
 
-        const data = await res.json();
+      if (!res.ok) {
+        // If user not found, try register endpoint
+        if (res.status === 404) {
+          const registerRes = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name: email.split('@')[0] }),
+          });
 
-        if (!res.ok) {
-          setMessage({ type: 'error', text: data.error });
-          setIsLoading(false);
-          return;
-        }
+          const registerData = await registerRes.json();
 
-        setSubmitted(true);
-      } else {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (res.status === 404) {
-            setMessage({ type: 'error', text: 'Ez az email nincs regisztrálva. Regisztrálj először!' });
-            setMode('register');
+          if (!registerRes.ok) {
+            setMessage({ type: 'error', text: registerData.error || 'Hiba történt' });
             setIsLoading(false);
             return;
           }
-          setMessage({ type: 'error', text: data.error });
-          setIsLoading(false);
+
+          setSubmitted(true);
           return;
         }
 
-        setSubmitted(true);
+        setMessage({ type: 'error', text: data.error || 'Hiba történt' });
+        setIsLoading(false);
+        return;
       }
+
+      setSubmitted(true);
     } catch {
       setMessage({ type: 'error', text: 'Hálózati hiba. Próbáld újra!' });
     } finally {
@@ -137,9 +118,7 @@ export function AuthModal() {
               Ellenőrizd az email fiókodat!
             </h3>
             <p className="text-gray-500 text-sm mb-2">
-              {mode === 'login'
-                ? 'Bejelentkezési linket küldtünk ide:'
-                : 'Megerősítő linket küldtünk ide:'}
+              Bejelentkezési linket küldtünk ide:
             </p>
             <p className="font-medium text-gray-900 mb-4">{email}</p>
             <p className="text-xs text-gray-400 mb-6">
@@ -173,38 +152,15 @@ export function AuthModal() {
           </svg>
         </button>
 
-        {/* Logo */}
+        {/* Logo & Title */}
         <div className="text-center mb-6">
           <div className="flex justify-center mb-2">
             <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
           </div>
-          <p className="text-gray-500 mt-2 text-sm">
-            {mode === 'login' ? 'Jelentkezz be a fiókodba' : 'Hozz létre egy fiókot'}
+          <h2 className="text-xl font-bold text-gray-900 mt-3">Belépés</h2>
+          <p className="text-gray-500 mt-1 text-sm">
+            Add meg az email címed, és küldünk egy linket
           </p>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-          <button
-            onClick={() => { setMode('login'); setMessage(null); }}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
-              mode === 'login'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Bejelentkezés
-          </button>
-          <button
-            onClick={() => { setMode('register'); setMessage(null); }}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
-              mode === 'register'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Regisztráció
-          </button>
         </div>
 
         {/* Message */}
@@ -222,24 +178,6 @@ export function AuthModal() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <div>
-              <label htmlFor="modal-name" className="block text-sm font-medium text-gray-700 mb-1">
-                Név
-              </label>
-              <input
-                id="modal-name"
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Teljes neved"
-                required
-                minLength={2}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
-              />
-            </div>
-          )}
-
           <div>
             <label htmlFor="modal-email" className="block text-sm font-medium text-gray-700 mb-1">
               Email cím
@@ -251,30 +189,10 @@ export function AuthModal() {
               onChange={e => setEmail(e.target.value)}
               placeholder="te@email.com"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
+              autoFocus
+              className="w-full px-4 py-3 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition-all"
             />
           </div>
-
-          {mode === 'register' && (
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={e => setAcceptedTerms(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
-              />
-              <span className="text-sm text-gray-600">
-                Elfogadom az{' '}
-                <a href="/aszf" target="_blank" className="text-yellow-600 hover:underline">
-                  ÁSZF-et
-                </a>{' '}
-                és az{' '}
-                <a href="/adatvedelem" target="_blank" className="text-yellow-600 hover:underline">
-                  Adatvédelmi tájékoztatót
-                </a>
-              </span>
-            </label>
-          )}
 
           <button
             type="submit"
@@ -289,19 +207,15 @@ export function AuthModal() {
                 </svg>
                 Küldés...
               </span>
-            ) : mode === 'login' ? (
-              'Bejelentkezési link küldése'
             ) : (
-              'Regisztráció'
+              'Link küldése'
             )}
           </button>
         </form>
 
         {/* Info */}
         <p className="text-center text-xs text-gray-400 mt-6">
-          {mode === 'login'
-            ? 'Egy bejelentkezési linket küldünk az email címedre. Jelszó nem szükséges.'
-            : 'Egy megerősítő linket küldünk az email címedre.'}
+          Jelszó nélkül, egyszerűen. Magic linket küldünk az email címedre.
         </p>
       </div>
     </div>

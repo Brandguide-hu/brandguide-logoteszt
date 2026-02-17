@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate magic link for email verification
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: email.toLowerCase(),
