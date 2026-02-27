@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { CATEGORIES } from '@/types';
 
 interface AnalysisSummary {
   id: string;
   logo_name: string;
+  creator_name: string | null;
   tier: string;
   status: string;
   visibility: string;
@@ -18,29 +20,35 @@ interface AnalysisSummary {
   result: { osszpontszam?: number } | null;
 }
 
+interface EditModal {
+  id: string;
+  logo_name: string;
+  creator_name: string;
+  category: string;
+}
+
 export default function DashboardPage() {
   const { user, profile, isLoading } = useAuth();
   const router = useRouter();
   const [analyses, setAnalyses] = useState<AnalysisSummary[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editModal, setEditModal] = useState<EditModal | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
       router.push('/auth/login?redirect=/dashboard');
       return;
     }
-
-    if (user) {
-      fetchAnalyses();
-    }
+    if (user) fetchAnalyses();
   }, [user, isLoading, router]);
 
   const fetchAnalyses = async () => {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase
       .from('analyses')
-      .select('id, logo_name, tier, status, visibility, rejection_reason, category, created_at, result')
+      .select('id, logo_name, creator_name, tier, status, visibility, rejection_reason, category, created_at, result')
       .eq('user_id', user!.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -68,6 +76,42 @@ export default function DashboardPage() {
       setAnalyses(prev => prev.filter(a => a.id !== analysisId));
     }
     setDeletingId(null);
+  };
+
+  const openEdit = (e: React.MouseEvent, analysis: AnalysisSummary) => {
+    e.stopPropagation();
+    setEditModal({
+      id: analysis.id,
+      logo_name: analysis.logo_name || '',
+      creator_name: analysis.creator_name || '',
+      category: analysis.category || 'other',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editModal) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/analysis/${editModal.id}/metadata`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logo_name: editModal.logo_name,
+          creator_name: editModal.creator_name,
+          category: editModal.category,
+        }),
+      });
+      if (!res.ok) throw new Error('Hiba');
+      setAnalyses(prev => prev.map(a =>
+        a.id === editModal.id
+          ? { ...a, logo_name: editModal.logo_name, creator_name: editModal.creator_name, category: editModal.category }
+          : a
+      ));
+      setEditModal(null);
+    } catch {
+      alert('Hiba történt a mentés során.');
+    }
+    setIsSaving(false);
   };
 
   if (isLoading) {
@@ -152,7 +196,7 @@ export default function DashboardPage() {
                 <div
                   key={analysis.id}
                   className="w-full bg-white rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => router.push(`/dashboard/${analysis.id}`)}
+                  onClick={() => router.push(`/eredmeny/${analysis.id}`)}
                 >
                   <div className="flex items-center gap-4">
                     {/* Score */}
@@ -191,7 +235,7 @@ export default function DashboardPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                        Elemzés megtekintése
+                        Megtekintés
                       </button>
                     )}
                     {isPending && (
@@ -202,9 +246,19 @@ export default function DashboardPage() {
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Elemzés indítása
+                        Indítás
                       </button>
                     )}
+                    {/* Edit gomb — mindig elérhető */}
+                    <button
+                      onClick={(e) => openEdit(e, analysis)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-50 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Szerkesztés
+                    </button>
                     <div className="flex-1" />
                     {isPaid && (
                       <button
@@ -226,6 +280,66 @@ export default function DashboardPage() {
         )}
       </div>
     </div>
+
+    {/* Edit modal */}
+    {editModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditModal(null)}>
+        <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+          <h2 className="text-lg font-semibold text-gray-900 mb-5">Adatok szerkesztése</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Logó neve</label>
+              <input
+                type="text"
+                value={editModal.logo_name}
+                onChange={e => setEditModal(prev => prev ? { ...prev, logo_name: e.target.value } : null)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                placeholder="pl. Nike logó"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Alkotó / Ügyfél</label>
+              <input
+                type="text"
+                value={editModal.creator_name}
+                onChange={e => setEditModal(prev => prev ? { ...prev, creator_name: e.target.value } : null)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                placeholder="pl. John Smith"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Kategória</label>
+              <select
+                value={editModal.category}
+                onChange={e => setEditModal(prev => prev ? { ...prev, category: e.target.value } : null)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none bg-white"
+              >
+                {Object.entries(CATEGORIES).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => setEditModal(null)}
+              className="flex-1 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              Mégse
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              disabled={isSaving}
+              className="flex-1 py-2.5 rounded-lg bg-gray-900 text-sm font-medium text-white hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isSaving ? 'Mentés...' : 'Mentés'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </AppLayout>
   );
 }

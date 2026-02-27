@@ -9,11 +9,14 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const { hasAuthCookie, response } = checkSession(request);
 
+  // Visual analysis test page is public
+  const isVisualTestPage = /^\/dashboard\/[^/]+\/visual$/.test(pathname);
+
   // Protected routes: redirect to login if not authenticated
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
 
-  if ((isProtectedRoute || isAdminRoute) && !hasAuthCookie) {
+  if ((isProtectedRoute || isAdminRoute) && !isVisualTestPage && !hasAuthCookie) {
     const loginUrl = new URL('/auth/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);

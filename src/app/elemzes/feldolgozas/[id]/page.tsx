@@ -220,6 +220,10 @@ function FeldolgozasContent() {
             setTimeout(() => {
               router.push(`/eredmeny/${analysisId}`);
             }, 500);
+          } else if (pollData.status === 'error') {
+            clearInterval(pollInterval);
+            addDebugLog(`Poll: HIBA! ${pollData.error_message || 'Ismeretlen hiba'}`);
+            setError(pollData.error_message || 'Az elemzés során hiba történt. Kérlek próbáld újra.');
           }
         }
       } catch {
@@ -235,19 +239,14 @@ function FeldolgozasContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisId, router]);
 
-  // SSE Stream kezelés - a régi teszt oldal logikája
-  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string) => {
-    addDebugLog(`SSE indítás: analysisId=${analysisId}, mediaType=${mediaType}`);
+  // SSE Stream kezelés - Light tier (egyetlen KB-Extract hívás)
+  const runLightAnalysisWithSSE = useCallback(async () => {
+    addDebugLog(`Light SSE indítás: analysisId=${analysisId}`);
 
-    const response = await fetch('/api/analyze', {
+    const response = await fetch('/api/analyze/light', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        logo,
-        mediaType,
-        testLevel: 'detailed',
-        analysisId, // Így a backend UPDATE-eli a meglévő rekordot
-      }),
+      body: JSON.stringify({ analysisId }),
     });
 
     addDebugLog(`HTTP válasz: ${response.status} ${response.statusText}`);
@@ -262,58 +261,46 @@ function FeldolgozasContent() {
     }
 
     const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('Nem sikerült olvasni a választ');
-    }
+    if (!reader) throw new Error('Nem sikerült olvasni a választ');
 
-    addDebugLog('SSE stream megnyílt, olvasás kezdődik...');
+    addDebugLog('Light SSE stream megnyílt...');
 
     const decoder = new TextDecoder();
     let buffer = '';
     let lastEventTime = Date.now();
     let completed = false;
 
-    // Watchdog: ha 65 másodpercig nem jön semmi (még heartbeat sem), polling fallback
     const watchdogTimeout = setTimeout(() => {
       const elapsed = Math.round((Date.now() - lastEventTime) / 1000);
       addDebugLog(`WATCHDOG: ${elapsed}s óta nem jött adat! Polling fallback-re váltok.`);
       reader.cancel();
-    }, 65000);
+    }, 150000);
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          addDebugLog('SSE stream lezárva (done=true)');
-          break;
-        }
+        if (done) { addDebugLog('Light SSE stream lezárva'); break; }
 
         lastEventTime = Date.now();
         buffer += decoder.decode(value, { stream: true });
-
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         let currentEvent = '';
         for (const line of lines) {
           if (line.startsWith(': ')) {
-            // heartbeat comment sor
-            addDebugLog(`Heartbeat érkezett`);
+            addDebugLog('Heartbeat érkezett');
           } else if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim();
           } else if (line.startsWith('data: ')) {
             const data = line.slice(6);
             try {
               const parsed = JSON.parse(data);
-
               switch (currentEvent) {
                 case 'status':
                   addDebugLog(`Phase: ${parsed.phase} | "${parsed.message}"`);
                   setStreamingPhase(parsed.phase as Phase);
                   setPhaseStartTime(prev => ({ ...prev, [parsed.phase]: Date.now() }));
-                  break;
-                case 'chunk':
-                  setStreamingText((prev) => prev + parsed.text);
                   break;
                 case 'debug':
                   addDebugLog(`[backend] ${parsed.message}`);
@@ -323,10 +310,7 @@ function FeldolgozasContent() {
                   clearTimeout(watchdogTimeout);
                   completed = true;
                   setStreamingPhase('complete');
-                  // Redirect az eredmény oldalra
-                  setTimeout(() => {
-                    router.push(`/eredmeny/${analysisId}`);
-                  }, 800);
+                  setTimeout(() => { router.push(`/eredmeny/${analysisId}`); }, 800);
                   return;
                 case 'error':
                   addDebugLog(`HIBA: ${parsed.message}`);
@@ -335,10 +319,8 @@ function FeldolgozasContent() {
               }
             } catch (parseErr) {
               if (parseErr instanceof Error && parseErr.message !== 'Hiba történt') {
-                addDebugLog(`JSON parse hiba: ${parseErr.message} | raw: ${data.slice(0, 80)}`);
-              } else {
-                throw parseErr;
-              }
+                addDebugLog(`JSON parse hiba: ${parseErr.message}`);
+              } else { throw parseErr; }
             }
           }
         }
@@ -347,12 +329,139 @@ function FeldolgozasContent() {
       clearTimeout(watchdogTimeout);
     }
 
-    // Ha idáig eljutottunk: a stream lezárult complete event nélkül.
-    // A Netlify lezárta a HTTP kapcsolatot, de a function tovább fut.
-    // Váltunk polling módra.
-    if (!completed) {
-      startPollingFallback();
+    if (!completed) startPollingFallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisId, router, startPollingFallback]);
+
+  // SSE Stream kezelés - MAX tier
+  // Vision SSE (~22s, <60s limit) → Background function trigger → Polling
+  // A scoring+summary Netlify background function-ben fut (15 perc limit)
+  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string) => {
+    addDebugLog(`MAX SSE indítás (vision+background): analysisId=${analysisId}, mediaType=${mediaType}`);
+
+    // ========================================
+    // STEP 1: Vision SSE (~22s) — szinkron, <60s
+    // ========================================
+    addDebugLog('Step 1/2: Vision...');
+    setStreamingPhase('vision');
+    setPhaseStartTime(prev => ({ ...prev, vision: Date.now() }));
+
+    const visionResponse = await fetch('/api/analyze/vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logo, mediaType }),
+    });
+
+    addDebugLog(`Vision HTTP: ${visionResponse.status}`);
+    if (!visionResponse.ok) {
+      const ct = visionResponse.headers.get('content-type');
+      if (ct?.includes('application/json')) {
+        const err = await visionResponse.json();
+        throw new Error(err.error || 'Vision hiba');
+      }
+      throw new Error('Vision hiba');
     }
+
+    // SSE stream olvasás a Vision-höz
+    const reader = visionResponse.body?.getReader();
+    if (!reader) throw new Error('Nem sikerült olvasni a választ');
+
+    addDebugLog('Vision SSE stream megnyílt...');
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let lastEventTime = Date.now();
+    let visionDescription = '';
+    let visionCompleted = false;
+
+    const watchdogTimeout = setTimeout(() => {
+      const elapsed = Math.round((Date.now() - lastEventTime) / 1000);
+      addDebugLog(`WATCHDOG (Vision): ${elapsed}s óta nem jött adat!`);
+      reader.cancel();
+    }, 65000);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { addDebugLog('Vision stream lezárva'); break; }
+
+        lastEventTime = Date.now();
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith(': ') || line === '') continue;
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              switch (currentEvent) {
+                case 'status':
+                  addDebugLog(`Phase: ${parsed.phase} | "${parsed.message}"`);
+                  setStreamingPhase(parsed.phase as Phase);
+                  setPhaseStartTime(prev => ({ ...prev, [parsed.phase]: Date.now() }));
+                  break;
+                case 'debug':
+                  addDebugLog(`[backend] ${parsed.message}`);
+                  break;
+                case 'complete':
+                  visionDescription = parsed.visionDescription || '';
+                  visionCompleted = true;
+                  addDebugLog(`Vision KÉSZ! Leírás: ${visionDescription.length} kar`);
+                  clearTimeout(watchdogTimeout);
+                  break;
+                case 'error':
+                  addDebugLog(`Vision HIBA: ${parsed.message}`);
+                  clearTimeout(watchdogTimeout);
+                  throw new Error(parsed.message || 'Vision hiba');
+                case 'heartbeat':
+                  break;
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== 'Vision hiba') {
+                addDebugLog(`JSON parse hiba: ${(parseErr as Error).message}`);
+              } else { throw parseErr; }
+            }
+          }
+        }
+        if (visionCompleted) break;
+      }
+    } finally {
+      clearTimeout(watchdogTimeout);
+    }
+
+    if (!visionCompleted || !visionDescription) {
+      addDebugLog('Vision nem sikerült, polling fallback...');
+      startPollingFallback();
+      return;
+    }
+
+    // ========================================
+    // STEP 2: Trigger background function → polling
+    // ========================================
+    addDebugLog('Step 2/2: Background function trigger...');
+    setStreamingPhase('analysis');
+    setPhaseStartTime(prev => ({ ...prev, analysis: Date.now() }));
+
+    const triggerResponse = await fetch('/api/analyze/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visionDescription, logo, analysisId }),
+    });
+
+    addDebugLog(`Trigger HTTP: ${triggerResponse.status}`);
+
+    if (!triggerResponse.ok) {
+      addDebugLog('Trigger hiba, polling fallback...');
+      startPollingFallback();
+      return;
+    }
+
+    addDebugLog('Background function elindítva, polling mód...');
+    startPollingFallback();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisId, router, startPollingFallback]);
 
@@ -372,7 +481,7 @@ function FeldolgozasContent() {
       }
 
       const analysisData = await infoRes.json();
-      addDebugLog(`DB status: ${analysisData.status}, logo_base64: ${analysisData.logo_base64 ? `${String(analysisData.logo_base64).length} kar` : 'NINCS'}, result keys: ${analysisData.result ? Object.keys(analysisData.result).length : 0}`);
+      addDebugLog(`DB status: ${analysisData.status}, tier: ${analysisData.tier}, test_level: ${analysisData.test_level}, logo_base64: ${analysisData.logo_base64 ? `${String(analysisData.logo_base64).length} kar` : 'NINCS'}, result keys: ${analysisData.result ? Object.keys(analysisData.result).length : 0}`);
 
       // Ha már completed, egyből redirect
       if (analysisData.status === 'completed' && analysisData.result && Object.keys(analysisData.result).length > 0) {
@@ -411,7 +520,16 @@ function FeldolgozasContent() {
 
       // Ha pending VAGY processing stuck (üres result), indítsuk az SSE streaming elemzést
       if ((analysisData.status === 'pending' || analysisData.status === 'processing') && analysisData.logo_base64) {
-        // Determine media type from the base64 or default to png
+        // Light tier: free + basic → Light endpoint (csak analysisId kell, logo DB-ből)
+        const isLight = analysisData.tier === 'free' && (analysisData.test_level === 'basic' || !analysisData.test_level);
+        addDebugLog(`SSE mód: ${isLight ? 'LIGHT' : 'MAX'}, status=${analysisData.status}`);
+
+        if (isLight) {
+          await runLightAnalysisWithSSE();
+          return;
+        }
+
+        // MAX tier: logo küldése SSE-vel
         let mediaType = 'image/png';
         if (analysisData.logo_original_path) {
           const ext = analysisData.logo_original_path.split('.').pop()?.toLowerCase();
@@ -419,8 +537,7 @@ function FeldolgozasContent() {
           else if (ext === 'webp') mediaType = 'image/webp';
         }
 
-        addDebugLog(`SSE mód: status=${analysisData.status}, mediaType=${mediaType}`);
-        // SSE streaming elemzés indítása - mint a régi teszt oldalon
+        addDebugLog(`MAX SSE mód: status=${analysisData.status}, mediaType=${mediaType}`);
         await runAnalysisWithSSE(analysisData.logo_base64, mediaType);
         return;
       }
@@ -458,7 +575,7 @@ function FeldolgozasContent() {
       console.error('Analysis error:', err);
       setError(err instanceof Error ? err.message : 'Ismeretlen hiba történt');
     }
-  }, [analysisId, isStarted, router, runAnalysisWithSSE]);
+  }, [analysisId, isStarted, router, runAnalysisWithSSE, runLightAnalysisWithSSE]);
 
   // Automatikus indítás
   useEffect(() => {
@@ -497,12 +614,12 @@ function FeldolgozasContent() {
   return (
     <div className="relative min-h-screen">
       {/* Background: Result page skeleton */}
-      <div className="pointer-events-none opacity-80">
+      <div className="pointer-events-none">
         <ResultSkeleton />
       </div>
 
       {/* Overlay with dark card */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-[2px]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-[1px]">
         {/* Dark card container */}
         <div className="w-full max-w-lg rounded-3xl bg-gray-900 p-8 text-center shadow-2xl mx-4">
           {/* SCORE Animation at top */}

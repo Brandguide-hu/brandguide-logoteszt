@@ -8,7 +8,6 @@ import { cx } from '@/utils/cx';
 
 const NAV_ITEMS = [
   { label: 'Így működik', href: '/igy-mukodik', authRequired: false },
-  { label: 'Logó elemzés', href: '/elemzes/uj', authRequired: false },
   { label: 'Árak', href: '/arak', authRequired: false },
   { label: 'Logó galéria', href: '/galeria', authRequired: false },
   { label: 'Dashboard', href: '/dashboard', authRequired: true },
@@ -17,7 +16,7 @@ const NAV_ITEMS = [
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, isLoading, signOut } = useAuth();
+  const { user, profile, isLoading, signOut, isAdmin } = useAuth();
   const { openAuthModal } = useAuthModal();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -71,6 +70,19 @@ export function Header() {
 
           {/* Desktop auth */}
           <div className="hidden md:flex items-center gap-3">
+            {/* CTA gomb — mindig látható */}
+            <button
+              onClick={() => router.push('/elemzes/uj')}
+              className={cx(
+                'px-4 py-2 text-sm font-semibold rounded-lg transition-colors cursor-pointer',
+                pathname?.startsWith('/elemzes')
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-[#FFF012] hover:bg-[#e6d810] text-gray-900'
+              )}
+            >
+              Logó elemzés
+            </button>
+
             {isLoading ? (
               <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
             ) : user ? (
@@ -101,6 +113,15 @@ export function Header() {
                       >
                         Dashboard
                       </button>
+                      {(isAdmin || profile?.is_admin) && (
+                        <button
+                          onClick={() => { router.push('/admin'); setProfileMenuOpen(false); }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center gap-2"
+                        >
+                          <span className="inline-block size-1.5 rounded-full bg-[#FFF012]" />
+                          Admin
+                        </button>
+                      )}
                       <button
                         onClick={handleSignOut}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
@@ -114,7 +135,7 @@ export function Header() {
             ) : (
               <button
                 onClick={() => openAuthModal()}
-                className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                className="px-4 py-2 bg-transparent border-2 border-[#FFF012] hover:bg-[#FFF012]/10 text-gray-900 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
               >
                 Bejelentkezés
               </button>
@@ -144,13 +165,25 @@ export function Header() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-gray-200 bg-white">
           <nav className="px-4 py-3 space-y-1">
+            {/* CTA gomb mobilon is */}
+            <button
+              onClick={() => handleNavClick('/elemzes/uj')}
+              className={cx(
+                'w-full text-left px-4 py-3 text-sm font-semibold rounded-lg transition-colors cursor-pointer',
+                pathname?.startsWith('/elemzes')
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-[#FFF012] text-gray-900'
+              )}
+            >
+              Logó elemzés
+            </button>
             {visibleItems.map(item => (
               <button
                 key={item.href}
                 onClick={() => handleNavClick(item.href)}
                 className={cx(
                   'w-full text-left px-4 py-3 text-sm font-medium rounded-lg transition-colors cursor-pointer',
-                  pathname === item.href || pathname?.startsWith(item.href + '/') || (item.href === '/elemzes/uj' && pathname?.startsWith('/elemzes'))
+                  pathname === item.href || pathname?.startsWith(item.href + '/')
                     ? 'bg-gray-100 text-gray-900'
                     : 'text-gray-600 hover:bg-gray-50'
                 )}
@@ -182,7 +215,7 @@ export function Header() {
             ) : (
               <button
                 onClick={() => { openAuthModal(); setMobileMenuOpen(false); }}
-                className="w-full py-3 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                className="w-full py-3 bg-transparent border-2 border-[#FFF012] hover:bg-[#FFF012]/10 text-gray-900 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
               >
                 Bejelentkezés
               </button>

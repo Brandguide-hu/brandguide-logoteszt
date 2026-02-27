@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Header } from '@/components/layout/Header';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { RadarChart, ResultSkeleton, ResultSidebar } from '@/components/results';
 import { AnalysisResult, CRITERIA_META, CriteriaName } from '@/types';
@@ -91,14 +92,19 @@ export default function GaleriaDetailPage() {
 
     setAnalysis(data);
 
-    // Logo URL
-    if (data.logo_original_path) {
-      const { data: urlData } = supabase.storage
-        .from('logos')
-        .getPublicUrl(data.logo_original_path);
-      if (urlData?.publicUrl) setLogoUrl(urlData.publicUrl);
-    } else if (data.logo_base64) {
-      setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+    // Logo URL: base64 elsőbbséget kap (Storage bucket nem publikus)
+    if (data.logo_base64) {
+      // Detect mime type from path extension
+      let mimeType = 'image/png';
+      if (data.logo_original_path) {
+        const ext = data.logo_original_path.split('.').pop()?.toLowerCase();
+        if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+        else if (ext === 'webp') mimeType = 'image/webp';
+      }
+      setLogoUrl(`data:${mimeType};base64,${data.logo_base64}`);
+    } else if (data.logo_thumbnail_path || data.logo_original_path) {
+      // Fallback: try OG endpoint which handles base64→PNG conversion
+      setLogoUrl(`/api/og/${data.id}`);
     }
 
     if (data.result) {
@@ -155,25 +161,8 @@ export default function GaleriaDetailPage() {
   const ratingStyle = getRatingStyle(result.osszpontszam);
 
   return (
-    <div className="min-h-screen bg-[#f9fafb]">
-        {/* Header */}
-        <header className="border-b border-gray-100 bg-white">
-            <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-between">
-                    <Link
-                        href="/galeria"
-                        className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
-                    >
-                        <ArrowLeft className="size-4" />
-                        Galéria
-                    </Link>
-                    <Link href="/">
-                        <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
-                    </Link>
-                    <div className="w-20" />
-                </div>
-            </div>
-        </header>
+    <div className="min-h-screen bg-[#f9fafb] overflow-x-hidden">
+        <Header />
 
         {/* Main content with sidebar */}
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -489,7 +478,7 @@ export default function GaleriaDetailPage() {
                         <p className="mx-auto mb-8 max-w-xl text-gray-400">
                             Készíts részletes elemzést a logódról – pontszámokkal, javaslatokkal, és szakmai értékeléssel.
                         </p>
-                        <Link href="/teszt">
+                        <Link href="/elemzes/uj">
                             <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg">
                                 Logo elemzés indítása
                                 <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

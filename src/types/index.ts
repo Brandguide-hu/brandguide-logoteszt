@@ -239,6 +239,73 @@ export interface AnalysisRecord {
   test_level: TestLevel;
 }
 
+// Vizuális elemzés – geometria
+export interface GeometryBalance {
+  center_of_mass: { x: number; y: number };
+  geometric_center: { x: number; y: number };
+  deviation_percent: number;
+  direction: string;
+}
+
+export interface GeometrySymmetry {
+  horizontal: number;
+  vertical: number;
+  heatmap_h_path: string;
+  heatmap_v_path: string;
+}
+
+export interface GeometryComplexity {
+  entropy: number;
+  edge_density: number;
+  category: 'simple' | 'moderate' | 'complex';
+}
+
+export interface GeometrySilhouette {
+  silhouette_path: string;
+}
+
+export interface GeometryAnalysis {
+  balance: GeometryBalance;
+  symmetry: GeometrySymmetry;
+  complexity: GeometryComplexity;
+  silhouette: GeometrySilhouette;
+}
+
+// Vizuális elemzés – színek
+export interface DominantColor {
+  hex: string;
+  percentage: number;
+  rgb: { r: number; g: number; b: number };
+  hsl: { h: number; s: number; l: number };
+}
+
+export interface ContrastPair {
+  foreground: string;
+  background: string;
+  ratio: number;
+  wcag_aa: boolean;
+  wcag_aa_large: boolean;
+}
+
+export interface ColorblindPaths {
+  protanopia: string;
+  deuteranopia: string;
+  tritanopia: string;
+  achromatopsia: string;
+}
+
+export interface VisualColorAnalysis {
+  dominant_colors: DominantColor[];
+  contrast_matrix: ContrastPair[];
+  colorblind_paths: ColorblindPaths;
+}
+
+// Teljes vizuális elemzés
+export interface VisualAnalysis {
+  geometry: GeometryAnalysis;
+  colors: VisualColorAnalysis;
+}
+
 // Supabase tábla típus (v0.91)
 export interface AnalysisRow {
   id: string;
@@ -264,6 +331,8 @@ export interface AnalysisRow {
   updated_at: string;
   completed_at: string | null;
   deleted_at: string | null;
+  visual_analysis: VisualAnalysis | null;
+  visual_analysis_at: string | null;
 }
 
 // Account eredete

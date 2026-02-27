@@ -169,7 +169,7 @@ export async function queryKBExtract<T>(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Netlify function limit: 60s)
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout (Sonnet scoring ~55s + buffer)
 
     const response = await fetch(BRANDGUIDE_ENDPOINT, {
       method: 'POST',
@@ -239,7 +239,7 @@ export async function queryKBExtract<T>(
     }
 
     if (error instanceof DOMException && error.name === 'AbortError') {
-      console.error('[KB-EXTRACT] Request timed out after 55s');
+      console.error('[KB-EXTRACT] Request timed out after 120s');
       throw new BrandguideAPIError(
         'Az elemzés időtúllépés miatt megszakadt. Kérlek próbáld újra.',
         'TIMEOUT'

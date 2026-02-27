@@ -3,6 +3,9 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 
+// ⚠️ TESZTELÉSI FLAG: true = 24h limit kikapcsolva, false = normál működés
+const DISABLE_FREE_LIMIT = true;
+
 /**
  * POST /api/analysis/create
  * Bejelentkezett user ingyenes elemzés létrehozása a pending_analyses adatból.
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (pending.tier === 'free' && profile?.last_free_analysis_at) {
+    if (!DISABLE_FREE_LIMIT && pending.tier === 'free' && profile?.last_free_analysis_at) {
       const lastAnalysis = new Date(profile.last_free_analysis_at);
       const now = new Date();
       const hoursSince = (now.getTime() - lastAnalysis.getTime()) / (1000 * 60 * 60);
@@ -128,7 +131,7 @@ export async function POST(request: NextRequest) {
         logo_original_path: permanentPath,
         logo_thumbnail_path: thumbnailPath,
         logo_base64: base64,
-        test_level: 'detailed',
+        test_level: pending.tier === 'free' ? 'basic' : 'detailed',
       })
       .select('id')
       .single();

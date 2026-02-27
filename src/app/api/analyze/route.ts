@@ -11,6 +11,10 @@
  */
 
 import { NextRequest } from 'next/server';
+
+export const runtime = 'nodejs';
+export const maxDuration = 120; // 120s (Vision ~22s + Sonnet scoring ~55s + summary ~9s + buffer)
+
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { AnalysisResult, ColorAnalysis, TypographyAnalysis, VisualLanguageAnalysis, CriteriaScore } from '@/types';
 import {
@@ -189,20 +193,27 @@ export async function POST(request: NextRequest) {
     await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
   };
 
-  // Heartbeat to keep Netlify function alive during long API calls
-  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  // Heartbeat using DATA events (not SSE comments) to keep Netlify gateway alive
+  // FONTOS: Netlify gateway SSE comment-eket (: heartbeat) NEM tekinti adatforgalomnak → idle timeout
+  let heartbeatRunning = true;
+  let heartbeatResolve: (() => void) | null = null;
+  const heartbeatStopped = new Promise<void>(r => { heartbeatResolve = r; });
   const startHeartbeat = () => {
-    heartbeatInterval = setInterval(async () => {
-      try {
-        await writer.write(encoder.encode(': heartbeat\n\n'));
-      } catch { /* stream closed */ }
-    }, 3000);
+    (async () => {
+      while (heartbeatRunning) {
+        try {
+          await writer.write(encoder.encode(`event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`));
+        } catch {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      heartbeatResolve?.();
+    })();
   };
-  const stopHeartbeat = () => {
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      heartbeatInterval = null;
-    }
+  const stopHeartbeat = async () => {
+    heartbeatRunning = false;
+    await heartbeatStopped;
   };
 
   // Start the streaming response
@@ -431,12 +442,12 @@ export async function POST(request: NextRequest) {
       result.id = savedId;
 
       // Send final result
-      stopHeartbeat();
+      await stopHeartbeat();
       await sendEvent('complete', { id: savedId, result });
       await writer.close();
 
     } catch (error) {
-      stopHeartbeat();
+      await stopHeartbeat();
       console.error('[ANALYZE V4] Error:', error);
       await sendEvent('error', {
         message: error instanceof Error ? error.message : 'Ismeretlen hiba'

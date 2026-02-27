@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Copy01, Check, Share07 } from "@untitledui/icons";
 import { CATEGORIES, TIER_INFO } from "@/types";
 
@@ -17,6 +17,46 @@ interface ResultSidebarProps {
 
 export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, category, tier, createdAt }: ResultSidebarProps) {
     const [copied, setCopied] = useState(false);
+    const [showSticky, setShowSticky] = useState(false);
+    const [stickyWidth, setStickyWidth] = useState(0);
+    const [stickyLeft, setStickyLeft] = useState(0);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Measure container width and position for the fixed sticky card
+    const measureContainer = useCallback(() => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setStickyWidth(rect.width);
+            setStickyLeft(rect.left);
+        }
+    }, []);
+
+    // Watch when the last sidebar card scrolls out of view (upward)
+    useEffect(() => {
+        if (!sentinelRef.current) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                // Only show sticky when sentinel scrolled ABOVE viewport (not below)
+                const scrolledPast = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+                setShowSticky(scrolledPast);
+            },
+            { threshold: 0 }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // Measure on mount, resize, and when sticky becomes visible
+    useEffect(() => {
+        measureContainer();
+        window.addEventListener('resize', measureContainer);
+        return () => window.removeEventListener('resize', measureContainer);
+    }, [measureContainer]);
+
+    useEffect(() => {
+        if (showSticky) measureContainer();
+    }, [showSticky, measureContainer]);
 
     const getShareUrl = () => {
         if (typeof window !== "undefined") {
@@ -53,9 +93,66 @@ export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, c
     };
 
     return (
-        <div className="space-y-6">
-            <aside className="sticky top-8 space-y-6">
-                {/* Share section */}
+        <div ref={containerRef} className="relative">
+            {/* Normal sidebar content - scrolls normally */}
+            <div className="space-y-6">
+                {/* 1. Logo preview + pontszám */}
+                {logoUrl && (
+                    <div className="rounded-2xl border border-gray-100 bg-white p-6">
+                        <div className="mb-4 flex items-center justify-center rounded-xl border border-gray-200 bg-white aspect-square p-6">
+                            <img
+                                src={logoUrl}
+                                alt="Elemzett logó"
+                                className="max-h-full max-w-full object-contain"
+                            />
+                        </div>
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-gray-900">{score}<span className="text-lg font-normal text-gray-400">/100</span></div>
+                            <div className="mt-1 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                                {rating}
+                            </div>
+                            <p className="mt-2 text-[10px] text-gray-400 tracking-wider uppercase">powered by brandguide SCORE</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* 2. Logo adatok */}
+                {(logoName || creatorName || category || tier || createdAt) && (
+                    <div className="rounded-2xl border border-gray-100 bg-white p-5 text-sm space-y-2.5">
+                        {logoName && (
+                            <div className="flex justify-between gap-2">
+                                <span className="text-gray-400 shrink-0">Logo neve</span>
+                                <span className="font-medium text-gray-900 text-right truncate">{logoName}</span>
+                            </div>
+                        )}
+                        {creatorName && (
+                            <div className="flex justify-between gap-2">
+                                <span className="text-gray-400 shrink-0">Készítő</span>
+                                <span className="font-medium text-gray-900 text-right truncate">{creatorName}</span>
+                            </div>
+                        )}
+                        {category && (
+                            <div className="flex justify-between gap-2">
+                                <span className="text-gray-400 shrink-0">Kategória</span>
+                                <span className="font-medium text-gray-900 text-right">{CATEGORIES[category as keyof typeof CATEGORIES] || category}</span>
+                            </div>
+                        )}
+                        {tier && TIER_INFO[tier as keyof typeof TIER_INFO] && (
+                            <div className="flex justify-between gap-2">
+                                <span className="text-gray-400 shrink-0">Csomag</span>
+                                <span className="font-medium text-gray-900">{TIER_INFO[tier as keyof typeof TIER_INFO].label}</span>
+                            </div>
+                        )}
+                        {createdAt && (
+                            <div className="flex justify-between gap-2">
+                                <span className="text-gray-400 shrink-0">Dátum</span>
+                                <span className="font-medium text-gray-900">{new Date(createdAt).toLocaleDateString('hu-HU')}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 3. Megosztás */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-6">
                     <div className="mb-4 flex items-center gap-2">
                         <Share07 className="size-4 text-gray-500" />
@@ -107,68 +204,46 @@ export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, c
                     </div>
                 </div>
 
-                {/* Logo preview - always visible in sidebar */}
-                {logoUrl && (
-                    <div className="rounded-2xl border border-gray-100 bg-white p-6">
-                        <div className="mb-4 flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 aspect-square p-6">
-                            <img
-                                src={logoUrl}
-                                alt="Elemzett logó"
-                                className="max-h-full max-w-full object-contain"
-                            />
-                        </div>
-                        <div className="text-center">
-                            <div className="text-3xl font-bold text-gray-900">{score}<span className="text-lg font-normal text-gray-400">/100</span></div>
-                            <div className="mt-1 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-                                {rating}
+                {/* 4. Banner */}
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6">
+                    <div className="flex aspect-[4/3] items-center justify-center text-center">
+                        <p className="text-sm text-gray-400">Banner helye<br />(admin-ból tölthető)</p>
+                    </div>
+                </div>
+
+                {/* Sentinel - when this scrolls out of view, show sticky card */}
+                <div ref={sentinelRef} className="h-0 w-full" aria-hidden="true" />
+            </div>
+
+            {/* Sticky compact logo+score card - fixed to navbar after sidebar scrolls out */}
+            {logoUrl && showSticky && stickyWidth > 0 && (
+                <div
+                    className="fixed z-40 animate-[tooltipFade_150ms_ease-out]"
+                    style={{
+                        top: 'calc(4rem + 12px)',
+                        width: stickyWidth,
+                        left: stickyLeft,
+                    }}
+                >
+                    <div className="rounded-2xl border border-gray-100 bg-white/95 backdrop-blur-sm p-4 shadow-lg">
+                        <div className="flex items-center gap-4">
+                            <div className="shrink-0 flex items-center justify-center rounded-xl border border-gray-200 bg-white w-16 h-16 p-2">
+                                <img
+                                    src={logoUrl}
+                                    alt="Elemzett logó"
+                                    className="max-h-full max-w-full object-contain"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold text-gray-900">{score}<span className="text-sm font-normal text-gray-400">/100</span></div>
+                                <div className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                                    {rating}
+                                </div>
                             </div>
                         </div>
                     </div>
-                )}
-            </aside>
-
-            {/* Info blokk */}
-            {(logoName || creatorName || category || tier || createdAt) && (
-                <div className="rounded-2xl border border-gray-100 bg-white p-5 text-sm space-y-2.5">
-                    {logoName && (
-                        <div className="flex justify-between gap-2">
-                            <span className="text-gray-400 shrink-0">Logo neve</span>
-                            <span className="font-medium text-gray-900 text-right truncate">{logoName}</span>
-                        </div>
-                    )}
-                    {creatorName && (
-                        <div className="flex justify-between gap-2">
-                            <span className="text-gray-400 shrink-0">Készítő</span>
-                            <span className="font-medium text-gray-900 text-right truncate">{creatorName}</span>
-                        </div>
-                    )}
-                    {category && (
-                        <div className="flex justify-between gap-2">
-                            <span className="text-gray-400 shrink-0">Kategória</span>
-                            <span className="font-medium text-gray-900 text-right">{CATEGORIES[category as keyof typeof CATEGORIES] || category}</span>
-                        </div>
-                    )}
-                    {tier && TIER_INFO[tier as keyof typeof TIER_INFO] && (
-                        <div className="flex justify-between gap-2">
-                            <span className="text-gray-400 shrink-0">Csomag</span>
-                            <span className="font-medium text-gray-900">{TIER_INFO[tier as keyof typeof TIER_INFO].label}</span>
-                        </div>
-                    )}
-                    {createdAt && (
-                        <div className="flex justify-between gap-2">
-                            <span className="text-gray-400 shrink-0">Dátum</span>
-                            <span className="font-medium text-gray-900">{new Date(createdAt).toLocaleDateString('hu-HU')}</span>
-                        </div>
-                    )}
                 </div>
             )}
-
-            {/* Banner — kívül a sticky sávon, scrollozik az oldallal */}
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6">
-                <div className="flex aspect-[4/3] items-center justify-center text-center">
-                    <p className="text-sm text-gray-400">Banner helye<br />(admin-ból tölthető)</p>
-                </div>
-            </div>
         </div>
     );
 }

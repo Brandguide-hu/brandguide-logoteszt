@@ -9,6 +9,10 @@
  */
 
 import { NextRequest } from 'next/server';
+
+export const runtime = 'nodejs';
+export const maxDuration = 120; // 120s (Sonnet scoring ~55s + summary ~9s + buffer)
+
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { AnalysisResult, ColorAnalysis, TypographyAnalysis, VisualLanguageAnalysis, CriteriaScore } from '@/types';
 import {
@@ -150,9 +154,10 @@ function clampSzempontok(szempontok: SzempontokMap): SzempontokMap {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { visionDescription, logo } = body as {
+  const { visionDescription, logo, analysisId } = body as {
     visionDescription: string;
     logo: string;
+    analysisId?: string;
   };
 
   if (!visionDescription) {
@@ -291,33 +296,56 @@ export async function POST(request: NextRequest) {
 
       await sendEvent('status', { message: 'Mentés adatbázisba...', phase: 'saving' });
 
-      console.log('[EXTRACT] Saving to DB... result size:', JSON.stringify(result).length, 'logo size:', logo?.length || 0);
+      console.log('[EXTRACT] Saving to DB... result size:', JSON.stringify(result).length, 'logo size:', logo?.length || 0, 'analysisId:', analysisId || 'NEW');
 
-      const { data: insertedData, error: dbError } = await getSupabaseAdmin()
-        .from('analyses')
-        .insert({
-          result: result as unknown as Record<string, unknown>,
-          logo_base64: logo,
-          test_level: 'detailed',
-          visibility: 'public',
-          status: 'completed',
-        })
-        .select('id')
-        .single();
+      let savedId: string;
 
-      if (dbError) {
-        console.error('[EXTRACT] DB error:', JSON.stringify(dbError));
-        console.error('[EXTRACT] DB error details:', dbError.message, dbError.code, dbError.hint);
-        throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+      if (analysisId) {
+        // Webhook/feldolgozás flow — UPDATE existing record
+        const { error: dbError } = await (getSupabaseAdmin()
+          .from('analyses') as any)
+          .update({
+            result: result as unknown as Record<string, unknown>,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', analysisId);
+
+        if (dbError) {
+          console.error('[EXTRACT] DB update error:', JSON.stringify(dbError));
+          throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+        }
+        savedId = analysisId;
+        console.log('[EXTRACT] Updated:', analysisId);
+      } else {
+        // Legacy flow — INSERT new record
+        const { data: insertedData, error: dbError } = await getSupabaseAdmin()
+          .from('analyses')
+          .insert({
+            result: result as unknown as Record<string, unknown>,
+            logo_base64: logo,
+            test_level: 'detailed',
+            visibility: 'public',
+            status: 'completed',
+          })
+          .select('id')
+          .single();
+
+        if (dbError) {
+          console.error('[EXTRACT] DB error:', JSON.stringify(dbError));
+          console.error('[EXTRACT] DB error details:', dbError.message, dbError.code, dbError.hint);
+          throw new Error(ERROR_MESSAGES.DB_SAVE_ERROR);
+        }
+        savedId = insertedData.id;
+        console.log('[EXTRACT] Inserted:', insertedData.id);
       }
 
-      result.id = insertedData.id;
-      console.log('[EXTRACT] Saved:', insertedData.id);
+      result.id = savedId;
 
       heartbeatRunning = false;
       await heartbeatStopped;
       // Csak az id-t küldjük — a frontend redirect-el az eredmény oldalra
-      await sendEvent('complete', { id: insertedData.id });
+      await sendEvent('complete', { id: savedId });
       console.log('[EXTRACT] Complete event sent');
       await writer.close();
 

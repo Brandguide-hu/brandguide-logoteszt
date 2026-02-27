@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,6 +9,7 @@ import { UploadForm } from '@/components/upload/UploadForm';
 import { DropZone } from '@/components/upload/DropZone';
 import { Tier, Category, TIER_INFO } from '@/types';
 import { cx } from '@/utils/cx';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 function NewAnalysisContent() {
   const router = useRouter();
@@ -17,10 +18,14 @@ function NewAnalysisContent() {
 
   // URL params
   const tierParam = searchParams.get('tier') as Tier | null;
+  const upgradeFrom = searchParams.get('upgradeFrom');
   const canceled = searchParams.get('canceled') === 'true';
 
+  // Ref a logo upload szekció scrollozásához
+  const uploadSectionRef = useRef<HTMLDivElement>(null);
+
   // Form state
-  const [selectedTier, setSelectedTier] = useState<Tier | null>(tierParam || null);
+  const [selectedTier, setSelectedTier] = useState<Tier | null>(tierParam || (upgradeFrom ? 'paid' : null));
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoName, setLogoName] = useState('');
   const [creatorName, setCreatorName] = useState('');
@@ -31,6 +36,53 @@ function NewAnalysisContent() {
   const [error, setError] = useState<string | null>(null);
   const [canUseFree, setCanUseFree] = useState<boolean | null>(null);
   const [showCancelBanner, setShowCancelBanner] = useState(canceled);
+  const [upgradeLoading, setUpgradeLoading] = useState(!!upgradeFrom);
+  const [upgradePreviewUrl, setUpgradePreviewUrl] = useState<string | null>(null);
+
+  // upgradeFrom: load the original analysis data and pre-fill the form
+  useEffect(() => {
+    if (!upgradeFrom) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/result/${upgradeFrom}`);
+        if (!res.ok) throw new Error('Nem található az eredeti elemzés');
+        const data = await res.json();
+
+        // Pre-fill form fields from the original analysis
+        if (data.logo_name) setLogoName(data.logo_name);
+        if (data.creator_name) setCreatorName(data.creator_name);
+        if (data.category) setCategory(data.category as Category);
+
+        // Convert base64 to File object
+        if (data.logo_base64) {
+          let mimeType = 'image/png';
+          if (data.logo_original_path) {
+            const ext = data.logo_original_path.split('.').pop()?.toLowerCase();
+            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+            else if (ext === 'webp') mimeType = 'image/webp';
+          }
+
+          const byteChars = atob(data.logo_base64);
+          const byteNumbers = new Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteNumbers[i] = byteChars.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+          const ext = mimeType.split('/')[1];
+          const file = new File([blob], `logo.${ext}`, { type: mimeType });
+          setLogoFile(file);
+          setUpgradePreviewUrl(`data:${mimeType};base64,${data.logo_base64}`);
+        }
+      } catch (err) {
+        console.error('[UPGRADE] Error loading original analysis:', err);
+      } finally {
+        setUpgradeLoading(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upgradeFrom]);
 
   // Pre-fill from profile
   useEffect(() => {
@@ -144,9 +196,14 @@ function NewAnalysisContent() {
         // --- BEJELENTKEZETT USER ---
         if (selectedTier === 'free') {
           // Free + logged in: start analysis immediately
+          const supabase = getSupabaseBrowserClient();
+          const { data: { session } } = await supabase.auth.getSession();
           const createRes = await fetch('/api/analysis/create', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+            },
             body: JSON.stringify({ pendingAnalysisId }),
           });
 
@@ -158,7 +215,7 @@ function NewAnalysisContent() {
           }
 
           const { analysisId } = await createRes.json();
-          router.push(`/dashboard/${analysisId}`);
+          router.push(`/elemzes/feldolgozas/${analysisId}`);
         } else {
           // Paid + logged in: Stripe checkout
           await redirectToStripe(pendingAnalysisId, selectedTier!, email || user.email!);
@@ -236,6 +293,11 @@ function NewAnalysisContent() {
   const handleTierSelect = (tier: Tier) => {
     setSelectedTier(tier);
 
+    // Scroll az upload szekció elejéhez rövid késleltetéssel (hogy a szekció megjelenjen)
+    setTimeout(() => {
+      uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+
     const sessionId = getOrCreateSessionId();
     fetch('/api/tracking/upload-event', {
       method: 'POST',
@@ -266,6 +328,17 @@ function NewAnalysisContent() {
     return `Fizetés és elemzés indítása — ${TIER_INFO[selectedTier].price}`;
   };
 
+  // Upgrade loading screen
+  if (upgradeLoading) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="min-h-screen bg-gray-50">
@@ -278,6 +351,25 @@ function NewAnalysisContent() {
           )}
 
           <h1 className="text-2xl font-bold text-gray-900 mb-6">Logó elemzés</h1>
+
+          {/* Upgrade banner */}
+          {upgradeFrom && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-[#FFF012] rounded-xl flex items-start gap-3">
+              <div className="shrink-0 mt-0.5">
+                {upgradePreviewUrl ? (
+                  <div className="w-12 h-12 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden p-1">
+                    <img src={upgradePreviewUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Teljes elemzés feloldása</p>
+                <p className="text-sm text-gray-600 mt-0.5">A logód előtöltve. Válaszd ki a MAX csomagot és fizess a teljes elemzésért.</p>
+              </div>
+            </div>
+          )}
 
           {/* Cancel banner */}
           {showCancelBanner && (
@@ -296,19 +388,44 @@ function NewAnalysisContent() {
             <TierSelector
               selectedTier={selectedTier}
               onSelect={handleTierSelect}
-              canUseFree={canUseFree}
+              canUseFree={upgradeFrom ? false : canUseFree}
               isLoggedIn={!!user}
             />
           </div>
 
           {/* Step 2: Logo Upload */}
           {selectedTier && (
-            <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 mb-6">
+            <div ref={uploadSectionRef} className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 mb-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Töltsd fel a logódat</h2>
-              <DropZone
-                onFileSelect={handleLogoSelect}
-                file={logoFile}
-              />
+              {/* Upgrade módban: előtöltött logó megjelenítése */}
+              {upgradeFrom && upgradePreviewUrl ? (
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="w-16 h-16 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden p-2 shrink-0">
+                    <img src={upgradePreviewUrl} alt="Előtöltött logó" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{logoName || 'Logó'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Előtöltve a korábbi elemzésből</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setLogoFile(null);
+                      setUpgradePreviewUrl(null);
+                    }}
+                    className="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Logó cseréje"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <DropZone
+                  onFileSelect={handleLogoSelect}
+                  file={logoFile}
+                />
+              )}
             </div>
           )}
 

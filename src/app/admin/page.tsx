@@ -25,6 +25,7 @@ interface AdminAnalysis {
   result: { osszpontszam?: number; minosites?: string } | null;
   created_at: string;
   user_id: string;
+  visual_analysis: unknown | null;
 }
 
 interface AdminUser {
@@ -54,6 +55,13 @@ interface FunnelData {
 }
 
 type Tab = 'dashboard' | 'pending' | 'all' | 'users' | 'funnel' | 'featured' | 'test';
+
+interface AdminEditModal {
+  id: string;
+  logo_name: string;
+  creator_name: string;
+  category: string;
+}
 
 interface FeaturedAnalysis {
   id: string;
@@ -86,8 +94,12 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [featuredSaving, setFeaturedSaving] = useState(false);
+  const [adminEditModal, setAdminEditModal] = useState<AdminEditModal | null>(null);
+  const [adminEditSaving, setAdminEditSaving] = useState(false);
   const [authState, setAuthState] = useState<'loading' | 'unauthorized' | 'authorized'>('loading');
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [visualLoading, setVisualLoading] = useState<string | null>(null);
+  const [visualDone, setVisualDone] = useState<Set<string>>(new Set());
 
   // Test analysis state
   const [testLogo, setTestLogo] = useState<string | null>(null);
@@ -97,6 +109,7 @@ export default function AdminPage() {
   const [testAnalysisPhase, setTestAnalysisPhase] = useState('');
   const [testAnalysisProgress, setTestAnalysisProgress] = useState(0);
   const [testAnalysisResult, setTestAnalysisResult] = useState<string | null>(null);
+  const [testDragOver, setTestDragOver] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -252,8 +265,6 @@ export default function AdminPage() {
   ];
 
   // Test analysis functions
-  const [testDragOver, setTestDragOver] = useState(false);
-
   const loadTestFile = (file: File) => {
     setTestLogoName(file.name);
     setTestMediaType(file.type || 'image/png');
@@ -458,6 +469,75 @@ export default function AdminPage() {
     setFeaturedSaving(false);
   };
 
+  const handleAdminSaveEdit = async () => {
+    if (!adminEditModal) return;
+    setAdminEditSaving(true);
+    try {
+      const res = await fetch(`/api/analysis/${adminEditModal.id}/metadata`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          logo_name: adminEditModal.logo_name,
+          creator_name: adminEditModal.creator_name,
+          category: adminEditModal.category,
+        }),
+      });
+      if (!res.ok) throw new Error('Hiba');
+      setAllItems(prev => prev.map(a =>
+        a.id === adminEditModal.id
+          ? { ...a, logo_name: adminEditModal.logo_name, creator_name: adminEditModal.creator_name, category: adminEditModal.category as Category }
+          : a
+      ));
+      setPendingItems(prev => prev.map(a =>
+        a.id === adminEditModal.id
+          ? { ...a, logo_name: adminEditModal.logo_name, creator_name: adminEditModal.creator_name, category: adminEditModal.category as Category }
+          : a
+      ));
+      setAdminEditModal(null);
+    } catch {
+      alert('Hiba történt a mentés során.');
+    }
+    setAdminEditSaving(false);
+  };
+
+  // Visual analysis generation
+  const handleVisualGenerate = async (analysisId: string, force = false) => {
+    setVisualLoading(analysisId);
+    try {
+      const res = await fetch(`/api/admin/visual-analysis/${analysisId}${force ? '?force=true' : ''}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        alert(`Szerverhiba (${res.status}):\n${text.slice(0, 200)}`);
+        setVisualLoading(null);
+        return;
+      }
+      if (res.ok || res.status === 409) {
+        setVisualDone(prev => new Set(prev).add(analysisId));
+        // Update the item in allItems to reflect visual_analysis presence
+        setAllItems(prev => prev.map(a =>
+          a.id === analysisId ? { ...a, visual_analysis: true } : a
+        ));
+      } else {
+        const errorMsg = data.error || 'Ismeretlen hiba';
+        const details = data.details ? `\n\nRészletek: ${data.details}` : '';
+        alert(`Hiba a vizuális elemzés generálásakor:\n${errorMsg}${details}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Hálózati hiba';
+      alert(`Hiba a vizuális elemzés generálásakor:\n${message}`);
+    }
+    setVisualLoading(null);
+  };
+
+  // Check which analyses already have visual analysis
+  const hasVisual = (item: AdminAnalysis) => !!item.visual_analysis || visualDone.has(item.id);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Simple header */}
@@ -543,6 +623,25 @@ export default function AdminPage() {
                       </div>
 
                       <div className="flex gap-2 flex-shrink-0">
+                        <a
+                          href={`/eredmeny/${item.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium rounded-lg transition-colors"
+                          title="Elemzés megtekintése"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          Elemzés
+                        </a>
+                        <button
+                          onClick={() => setAdminEditModal({ id: item.id, logo_name: item.logo_name || '', creator_name: item.creator_name || '', category: item.category || 'other' })}
+                          className="px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                          title="Szerkesztés"
+                        >
+                          ✎
+                        </button>
                         <button
                           onClick={() => handleAction('approve', item.id)}
                           disabled={actionLoading === item.id}
@@ -604,6 +703,7 @@ export default function AdminPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {item.is_weekly_winner && <span>🏆</span>}
+                            {hasVisual(item) && <span title="Van vizuális elemzés">🎨</span>}
                             <span className="font-medium text-gray-900 truncate max-w-[150px]">{item.logo_name}</span>
                           </div>
                         </td>
@@ -624,7 +724,16 @@ export default function AdminPage() {
                           {new Date(item.created_at).toLocaleDateString('hu-HU')}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex gap-1 justify-end">
+                          <div className="flex gap-1 justify-end flex-wrap">
+                            <a
+                              href={`/eredmeny/${item.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
+                              title="Elemzés megtekintése"
+                            >
+                              🔗
+                            </a>
                             {item.visibility === 'pending_approval' && (
                               <>
                                 <button
@@ -644,6 +753,13 @@ export default function AdminPage() {
                               </>
                             )}
                             <button
+                              onClick={() => setAdminEditModal({ id: item.id, logo_name: item.logo_name || '', creator_name: item.creator_name || '', category: item.category || 'other' })}
+                              className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100 cursor-pointer"
+                              title="Szerkesztés"
+                            >
+                              ✎
+                            </button>
+                            <button
                               onClick={() => handleAction('set_weekly_winner', item.id)}
                               disabled={actionLoading === item.id}
                               className="px-2 py-1 text-xs bg-yellow-50 text-yellow-700 rounded hover:bg-yellow-100 disabled:opacity-50 cursor-pointer"
@@ -651,6 +767,44 @@ export default function AdminPage() {
                             >
                               🏆
                             </button>
+                            {/* Visual analysis buttons */}
+                            {item.status === 'completed' && item.result && (
+                              hasVisual(item) ? (
+                                <div className="flex gap-1">
+                                  <a
+                                    href={`/dashboard/${item.id}/visual`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2 py-1 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100 cursor-pointer"
+                                    title="Vizuális nézet megnyitása"
+                                  >
+                                    🔗 Vizuális
+                                  </a>
+                                  <button
+                                    onClick={() => handleVisualGenerate(item.id, true)}
+                                    disabled={visualLoading === item.id}
+                                    className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100 disabled:opacity-50 cursor-pointer"
+                                    title="Újragenerálás"
+                                  >
+                                    🔄
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleVisualGenerate(item.id)}
+                                  disabled={visualLoading === item.id}
+                                  className="px-2 py-1 text-xs bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 disabled:opacity-50 cursor-pointer"
+                                  title="Vizuális elemzés generálása"
+                                >
+                                  {visualLoading === item.id ? (
+                                    <span className="flex items-center gap-1">
+                                      <span className="animate-spin inline-block w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full" />
+                                      Generálás...
+                                    </span>
+                                  ) : '⚡ Vizuális'}
+                                </button>
+                              )
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1061,6 +1215,66 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Admin Edit Modal */}
+      {adminEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAdminEditModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-900 mb-5">Adatok szerkesztése</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Logó neve</label>
+                <input
+                  type="text"
+                  value={adminEditModal.logo_name}
+                  onChange={e => setAdminEditModal(prev => prev ? { ...prev, logo_name: e.target.value } : null)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                  placeholder="pl. Nike logó"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Alkotó / Ügyfél</label>
+                <input
+                  type="text"
+                  value={adminEditModal.creator_name}
+                  onChange={e => setAdminEditModal(prev => prev ? { ...prev, creator_name: e.target.value } : null)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                  placeholder="pl. John Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Kategória</label>
+                <select
+                  value={adminEditModal.category}
+                  onChange={e => setAdminEditModal(prev => prev ? { ...prev, category: e.target.value } : null)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none bg-white"
+                >
+                  {Object.entries(CATEGORIES).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setAdminEditModal(null)}
+                className="flex-1 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Mégse
+              </button>
+              <button
+                onClick={handleAdminSaveEdit}
+                disabled={adminEditSaving}
+                className="flex-1 py-2.5 rounded-lg bg-gray-900 text-sm font-medium text-white hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {adminEditSaving ? 'Mentés...' : 'Mentés'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

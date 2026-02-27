@@ -67,12 +67,13 @@ export default function GaleriaPage() {
   };
 
   const getLogoUrl = (item: GalleryItem): string | null => {
-    if (item.logo_thumbnail_path) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      return `${supabaseUrl}/storage/v1/object/public/logos/${item.logo_thumbnail_path}`;
-    }
+    // base64 elsőbbséget kap (Storage bucket nem publikus)
     if (item.logo_base64) {
       return `data:image/png;base64,${item.logo_base64}`;
+    }
+    // Fallback: OG endpoint (base64→PNG konverzió backend oldalon)
+    if (item.logo_thumbnail_path || item.id) {
+      return `/api/og/${item.id}`;
     }
     return null;
   };

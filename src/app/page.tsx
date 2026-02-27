@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01 } from "@untitledui/icons";
 import { TransparentVideo } from "@/components/TransparentVideo";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -60,6 +60,8 @@ const ratings = [
 export default function Home() {
     const router = useRouter();
     const [featuredAnalyses, setFeaturedAnalyses] = useState<FeaturedAnalysis[]>([]);
+    const [activeCard, setActiveCard] = useState(0);
+    const carouselRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         fetch('/api/featured-analyses')
@@ -77,6 +79,21 @@ export default function Home() {
         router.push(url);
     };
 
+    const handleCarouselScroll = useCallback(() => {
+        const el = carouselRef.current;
+        if (!el) return;
+        const cardWidth = el.scrollWidth / featuredAnalyses.length;
+        const idx = Math.round(el.scrollLeft / cardWidth);
+        setActiveCard(Math.min(Math.max(idx, 0), featuredAnalyses.length - 1));
+    }, [featuredAnalyses.length]);
+
+    const scrollToCard = (idx: number) => {
+        const el = carouselRef.current;
+        if (!el) return;
+        const cardWidth = el.scrollWidth / featuredAnalyses.length;
+        el.scrollTo({ left: cardWidth * idx, behavior: 'smooth' });
+    };
+
     const getRatingLabel = (score: number) => {
         if (score >= 90) return { label: 'Kivételes', color: 'text-[#ca8a04]', bg: 'bg-[#fef9c3]' };
         if (score >= 80) return { label: 'Profi', color: 'text-[#9333ea]', bg: 'bg-[#f3e8ff]' };
@@ -88,7 +105,7 @@ export default function Home() {
 
     return (
         <AppLayout hideFooter>
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white overflow-x-hidden">
             {/* Hero Section */}
             <section className="relative px-4 pb-24 pt-12 sm:px-6 md:pb-32 md:pt-16 lg:px-8">
                 <div className="mx-auto max-w-4xl text-center">
@@ -144,9 +161,9 @@ export default function Home() {
 
             {/* Minta elemzések - ilyen elemzést kaphatsz */}
             {featuredAnalyses.length > 0 && (
-                <section className="px-4 py-16 sm:px-6 md:py-20 lg:px-8">
+                <section className="py-16 md:py-20 md:px-6 lg:px-8">
                     <div className="mx-auto max-w-5xl">
-                        <div className="mb-10 text-center">
+                        <div className="mb-10 px-4 text-center md:px-0">
                             <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
                                 Példák
                             </span>
@@ -157,22 +174,28 @@ export default function Home() {
                                 Nézd meg, milyen részletes értékelést kaptak mások logói
                             </p>
                         </div>
-                        <div className="grid gap-6 md:grid-cols-3">
+                        {/* Mobile: horizontal snap carousel | md+: grid */}
+                        <div
+                            ref={carouselRef}
+                            onScroll={handleCarouselScroll}
+                            className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide pl-4 pr-4 md:pl-0 md:pr-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:snap-none"
+                        >
                             {featuredAnalyses.map((analysis) => {
                                 const rating = getRatingLabel(analysis.total_score);
                                 return (
                                     <Link
                                         key={analysis.id}
                                         href={`/eredmeny/${analysis.id}`}
-                                        className="group rounded-2xl border border-gray-100 bg-white p-6 transition-all hover:border-gray-200 hover:shadow-md"
+                                        className="group shrink-0 w-[80vw] max-w-[320px] snap-start rounded-2xl border border-gray-100 bg-white p-6 transition-all hover:border-gray-200 hover:shadow-md md:w-auto md:max-w-none md:shrink"
                                     >
                                         {/* Logo preview */}
-                                        <div className="mb-4 flex aspect-square items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-6">
+                                        <div className="mb-4 flex aspect-square items-center justify-center rounded-xl border border-gray-200 bg-white p-6">
                                             {analysis.logo_url ? (
                                                 <img
                                                     src={analysis.logo_url}
                                                     alt={analysis.logo_name}
                                                     className="max-h-full max-w-full object-contain"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                                 />
                                             ) : (
                                                 <div className="h-12 w-12 rounded-xl bg-gray-200" />
@@ -201,6 +224,24 @@ export default function Home() {
                                 );
                             })}
                         </div>
+
+                        {/* Dot indicator – only on mobile */}
+                        {featuredAnalyses.length > 1 && (
+                            <div className="mt-6 flex justify-center gap-2 md:hidden">
+                                {featuredAnalyses.map((_, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => scrollToCard(idx)}
+                                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                                            idx === activeCard
+                                                ? 'w-6 bg-gray-900'
+                                                : 'w-2 bg-gray-300'
+                                        }`}
+                                        aria-label={`${idx + 1}. kártya`}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </section>
             )}
@@ -246,18 +287,20 @@ export default function Home() {
             </section>
 
             {/* brandguide SCORE Section */}
-            <section className="bg-gray-900 px-4 py-32 sm:px-6 md:py-40 lg:px-8">
+            <section className="bg-gray-900 px-4 py-32 sm:px-6 md:py-40 lg:px-8 overflow-hidden">
                 <div className="mx-auto max-w-5xl">
                     <div className="grid items-end gap-16 lg:grid-cols-2">
                         {/* Left content */}
-                        <div>
+                        <div className="min-w-0">
                             {/* SCORE Animation - Centered in left column */}
-                            <div className="flex justify-center mb-8">
-                                <TransparentVideo
-                                    src="/score-animation.webm"
-                                    maxSize={450}
-                                    threshold={40}
-                                />
+                            <div className="flex justify-center mb-8 w-full overflow-hidden">
+                                <div className="w-full max-w-[450px]">
+                                    <TransparentVideo
+                                        src="/score-animation.webm"
+                                        maxSize={450}
+                                        threshold={40}
+                                    />
+                                </div>
                             </div>
                             <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
                                 Módszertan

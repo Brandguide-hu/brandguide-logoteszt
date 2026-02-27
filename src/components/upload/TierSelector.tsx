@@ -10,8 +10,8 @@ interface TierSelectorProps {
   isLoggedIn: boolean;
 }
 
-// LAUNCH FLAG: Light csomag induláskor nem elérhető
-const LIGHT_COMING_SOON = true;
+// LAUNCH FLAG: Light csomag elérhető
+const LIGHT_COMING_SOON = false;
 
 export function TierSelector({ selectedTier, onSelect, canUseFree, isLoggedIn }: TierSelectorProps) {
   const isFreeLimitReached = canUseFree === false;

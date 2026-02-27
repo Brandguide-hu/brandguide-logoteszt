@@ -15,8 +15,19 @@ import {
     Target04, Stars01, Grid01, Lightbulb05, Clock, Globe01, Eye,
     Palette, TypeSquare, LayersThree01,
 } from "@untitledui/icons";
-import { HeaderAuth } from "@/components/layout/HeaderAuth";
+import { Header } from "@/components/layout/Header";
 import { ComponentType, SVGAttributes } from "react";
+
+// Markdown bold (**text**) → <strong> konverzió
+function renderWithBold(text: string): React.ReactNode {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={i} className="font-semibold text-gray-700">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+    });
+}
 
 // Criteria line icons
 const CRITERIA_ICONS: Record<string, ComponentType<SVGAttributes<SVGSVGElement>>> = {
@@ -38,7 +49,7 @@ export default function ResultPage() {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<CriteriaName>("megkulonboztethetoseg");
+    const [activeTab, setActiveTab] = useState<CriteriaName>("lathatosag");
     const [displayScore, setDisplayScore] = useState(0);
     const scoreAnimated = useRef(false);
     const heroLogoRef = useRef<HTMLDivElement>(null);
@@ -48,6 +59,7 @@ export default function ResultPage() {
     const [category, setCategory] = useState<string | null>(null);
     const [tier, setTier] = useState<string | null>(null);
     const [createdAt, setCreatedAt] = useState<string | null>(null);
+    const [testLevel, setTestLevel] = useState<string | null>(null);
 
     // Check auth state for breadcrumb
     useEffect(() => {
@@ -108,6 +120,7 @@ export default function ResultPage() {
                 setCategory(data.category || null);
                 setTier(data.tier || null);
                 setCreatedAt(data.created_at || null);
+                setTestLevel(data.test_level || null);
                 animateScore(resultData.osszpontszam);
             } catch (err) {
                 console.error("Fetch error:", err);
@@ -189,6 +202,42 @@ export default function ResultPage() {
         );
     }
 
+    // Light tier: blurozott szekciók
+    const isLight = testLevel === 'basic';
+
+    // BlurredSection helper: blur + upgrade CTA overlay (gombbal)
+    const BlurredSection = ({ children }: { children: React.ReactNode }) => (
+        <div className="relative mb-6">
+            <div className="blur-sm select-none pointer-events-none opacity-60">{children}</div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/75">
+                <div className="text-center px-6 py-4">
+                    <p className="text-sm text-gray-500 mb-3">Ez a szekció a MAX elemzésben érhető el</p>
+                    <button
+                        onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
+                        className="px-5 py-2.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                    >
+                        Teljes elemzés feloldása — 1 990 Ft + ÁFA
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // LockedSection helper: blur + lakat ikon overlay (gomb nélkül, kisebb blokkokhoz)
+    const LockedSection = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+        <div className={`relative ${className || ''}`}>
+            <div className="blur-sm select-none pointer-events-none opacity-50">{children}</div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/70">
+                <div className="flex flex-col items-center gap-1.5">
+                    <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                </div>
+            </div>
+        </div>
+    );
+
     // Rating color based on score
     const getRatingStyle = (score: number) => {
         if (score >= 90) return { color: "text-[#ca8a04]", bg: "bg-[#fef9c3]", label: "Kivételes" };
@@ -202,38 +251,11 @@ export default function ResultPage() {
     const ratingStyle = getRatingStyle(result.osszpontszam);
 
     return (
-        <div className="min-h-screen bg-[#f9fafb]">
-            {/* Header */}
-            <header className="border-b border-gray-100 bg-white">
-                <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between">
-                        {isLoggedIn ? (
-                            <button
-                                onClick={() => router.push('/dashboard')}
-                                className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
-                            >
-                                <ArrowLeft className="size-4" />
-                                Vissza a dashboardra
-                            </button>
-                        ) : (
-                            <Link
-                                href="/elemzes/uj"
-                                className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
-                            >
-                                <ArrowLeft className="size-4" />
-                                Új teszt
-                            </Link>
-                        )}
-                        <Link href="/">
-                            <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-10" />
-                        </Link>
-                        <HeaderAuth />
-                    </div>
-                </div>
-            </header>
+        <div className="min-h-screen bg-[#f9fafb] overflow-x-hidden">
+            <Header />
 
             {/* Main content with sidebar */}
-            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 overflow-x-hidden">
                 <div className="lg:grid lg:grid-cols-12 lg:gap-8">
                     {/* Main content area - 8 cols on desktop */}
                     <div className="lg:col-span-8">
@@ -241,7 +263,7 @@ export default function ResultPage() {
                         <div className="mb-8 flex flex-col sm:flex-row gap-6 sm:gap-8">
                             {/* Logo - large square, ~50% width */}
                             {logoUrl && (
-                                <div ref={heroLogoRef} className="shrink-0 flex items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 w-full sm:w-[48%] aspect-square p-10">
+                                <div ref={heroLogoRef} className="shrink-0 flex items-center justify-center rounded-2xl border border-gray-200 bg-white w-full sm:w-[48%] aspect-square p-10">
                                     <img
                                         src={logoUrl}
                                         alt="Elemzett logó"
@@ -278,49 +300,98 @@ export default function ResultPage() {
                                 Összefoglaló
                             </h2>
                             <p className="text-[16px] leading-[26px] text-gray-500">
-                                {result.osszegzes}
+                                {renderWithBold(result.osszegzes || '')}
                             </p>
                         </div>
 
                         {/* Strengths & Weaknesses - Two column */}
                         <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-2xl bg-emerald-50 p-5 transition-all duration-300">
-                                <div className="mb-3 flex items-center gap-2">
-                                    <CheckCircle className="size-5 text-emerald-600" />
-                                    <h3 className="font-semibold text-emerald-800">Erősségek</h3>
-                                </div>
-                                {result.erossegek && result.erossegek.length > 0 ? (
-                                    <ul className="space-y-2">
-                                        {result.erossegek.map((item, index) => (
-                                            <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
+                            {isLight ? (
+                                /* Light: blurozott erősségek dummy listával, lakat ikonnal */
+                                <>
+                                    <LockedSection className="rounded-2xl bg-emerald-50 p-5">
+                                        <div className="mb-3 flex items-center gap-2">
+                                            <CheckCircle className="size-5 text-emerald-600" />
+                                            <h3 className="font-semibold text-emerald-800">Erősségek</h3>
+                                        </div>
+                                        <ul className="space-y-2">
+                                            <li className="flex items-start gap-2 text-sm text-emerald-700">
                                                 <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
-                                                {item}
+                                                Erős vizuális identitás és karakteres megjelenés
                                             </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic">Nincs kiemelendő erősség</p>
-                                )}
-                            </div>
-
-                            <div className="rounded-2xl bg-amber-50 p-5 transition-all duration-300">
-                                <div className="mb-3 flex items-center gap-2">
-                                    <AlertTriangle className="size-5 text-amber-600" />
-                                    <h3 className="font-semibold text-amber-800">Fejlesztendő</h3>
-                                </div>
-                                {result.fejlesztendo && result.fejlesztendo.length > 0 ? (
-                                    <ul className="space-y-2">
-                                        {result.fejlesztendo.map((item, index) => (
-                                            <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
+                                            <li className="flex items-start gap-2 text-sm text-emerald-700">
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
+                                                Jól alkalmazható különböző méretekben és felületeken
+                                            </li>
+                                            <li className="flex items-start gap-2 text-sm text-emerald-700">
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
+                                                Egyedi formai megoldás, könnyen felismerhető
+                                            </li>
+                                        </ul>
+                                    </LockedSection>
+                                    <LockedSection className="rounded-2xl bg-amber-50 p-5">
+                                        <div className="mb-3 flex items-center gap-2">
+                                            <AlertTriangle className="size-5 text-amber-600" />
+                                            <h3 className="font-semibold text-amber-800">Fejlesztendő</h3>
+                                        </div>
+                                        <ul className="space-y-2">
+                                            <li className="flex items-start gap-2 text-sm text-amber-700">
                                                 <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
-                                                {item}
+                                                A színhasználat árnyaltabb megközelítést igényelhet
                                             </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic">Nincs kiemelendő fejlesztendő terület</p>
-                                )}
-                            </div>
+                                            <li className="flex items-start gap-2 text-sm text-amber-700">
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
+                                                Tipográfiai elemek finomhangolása javasolt
+                                            </li>
+                                            <li className="flex items-start gap-2 text-sm text-amber-700">
+                                                <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
+                                                Kis méretű alkalmazásban az olvashatóság javítható
+                                            </li>
+                                        </ul>
+                                    </LockedSection>
+                                </>
+                            ) : (
+                                /* MAX: valós adatok */
+                                <>
+                                    <div className="rounded-2xl bg-emerald-50 p-5 transition-all duration-300">
+                                        <div className="mb-3 flex items-center gap-2">
+                                            <CheckCircle className="size-5 text-emerald-600" />
+                                            <h3 className="font-semibold text-emerald-800">Erősségek</h3>
+                                        </div>
+                                        {result.erossegek && result.erossegek.length > 0 ? (
+                                            <ul className="space-y-2">
+                                                {result.erossegek.map((item, index) => (
+                                                    <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
+                                                        <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
+                                                        {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-gray-500 italic">Nincs kiemelendő erősség</p>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-2xl bg-amber-50 p-5 transition-all duration-300">
+                                        <div className="mb-3 flex items-center gap-2">
+                                            <AlertTriangle className="size-5 text-amber-600" />
+                                            <h3 className="font-semibold text-amber-800">Fejlesztendő</h3>
+                                        </div>
+                                        {result.fejlesztendo && result.fejlesztendo.length > 0 ? (
+                                            <ul className="space-y-2">
+                                                {result.fejlesztendo.map((item, index) => (
+                                                    <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
+                                                        <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
+                                                        {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-gray-500 italic">Nincs kiemelendő fejlesztendő terület</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Radar Chart */}
@@ -338,11 +409,11 @@ export default function ResultPage() {
                             </h2>
 
                             {/* Mobile dropdown */}
-                            <div className="mb-4 sm:hidden">
+                            <div className="mb-4 sm:hidden relative">
                                 <select
                                     value={activeTab}
                                     onChange={(e) => setActiveTab(e.target.value as CriteriaName)}
-                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                    className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
                                 >
                                     {Object.entries(result.szempontok).map(([key, value]) => {
                                         const criteriaKey = key as CriteriaName;
@@ -355,6 +426,11 @@ export default function ResultPage() {
                                         );
                                     })}
                                 </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             </div>
 
                             <div className="flex gap-4">
@@ -381,12 +457,12 @@ export default function ResultPage() {
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <IconComp className={`size-4 transition-colors ${isActive ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"}`} />
-                                                    <span className={`text-sm font-medium transition-colors ${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-700"}`}>
+                                                    <IconComp className={`size-3.5 shrink-0 transition-colors ${isActive ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"}`} />
+                                                    <span className={`text-xs font-medium transition-colors leading-tight ${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-700"}`}>
                                                         {meta.displayName}
                                                     </span>
                                                 </div>
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold transition-all ${scoreColor}`}>
+                                                <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold transition-all shrink-0 ${scoreColor}`}>
                                                     {value.pont}/{meta.maxScore}
                                                 </span>
                                             </button>
@@ -422,27 +498,67 @@ export default function ResultPage() {
                                                     />
                                                 </div>
 
-                                                {/* Description */}
-                                                <p className="mb-6 text-[16px] leading-[26px] text-gray-500">
-                                                    {value.indoklas}
-                                                </p>
-
-                                                {/* Suggestions */}
-                                                {value.javaslatok && value.javaslatok.length > 0 && (
-                                                    <div className="rounded-xl bg-amber-50/60 p-4">
-                                                        <div className="mb-3 flex items-center gap-2">
-                                                            <Lightbulb02 className="size-4 text-amber-600" />
-                                                            <h4 className="font-semibold text-amber-700">Javaslatok</h4>
+                                                {/* Description + Suggestions: Light módban blurozott */}
+                                                {isLight ? (
+                                                    <div className="relative">
+                                                        <div className="blur-sm select-none pointer-events-none opacity-60">
+                                                            <p className="mb-6 text-[16px] leading-[26px] text-gray-500">
+                                                                A részletes szöveges indoklás és a fejlesztési javaslatok a MAX elemzésben érhetők el. Frissíts a teljes csomagra a részletes visszajelzésért és konkrét fejlesztési javaslatokért.
+                                                            </p>
+                                                            <div className="rounded-xl bg-amber-50/60 p-4">
+                                                                <div className="mb-3 flex items-center gap-2">
+                                                                    <Lightbulb02 className="size-4 text-amber-600" />
+                                                                    <h4 className="font-semibold text-amber-700">Javaslatok</h4>
+                                                                </div>
+                                                                <ul className="space-y-2">
+                                                                    <li className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
+                                                                        <span className="shrink-0 mt-[9px] text-[8px] leading-none text-amber-500">●</span>
+                                                                        Részletes fejlesztési javaslat
+                                                                    </li>
+                                                                    <li className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
+                                                                        <span className="shrink-0 mt-[9px] text-[8px] leading-none text-amber-500">●</span>
+                                                                        Konkrét tervezési ajánlás
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
                                                         </div>
-                                                        <ul className="space-y-2">
-                                                            {value.javaslatok.map((javaslat, index) => (
-                                                                <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
-                                                                    <span className="shrink-0 mt-[9px] text-[8px] leading-none text-amber-500">●</span>
-                                                                    {javaslat}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
+                                                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
+                                                            <div className="text-center px-4 py-3">
+                                                                <p className="text-xs text-gray-500 mb-2">Részletes indoklás és javaslatok csak MAX csomagban</p>
+                                                                <button
+                                                                    onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
+                                                                    className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                                                                >
+                                                                    Feloldás — 1 990 Ft + ÁFA
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
+                                                ) : (
+                                                    <>
+                                                        {/* Description */}
+                                                        <p className="mb-6 text-[16px] leading-[26px] text-gray-500">
+                                                            {value.indoklas}
+                                                        </p>
+
+                                                        {/* Suggestions */}
+                                                        {value.javaslatok && value.javaslatok.length > 0 && (
+                                                            <div className="rounded-xl bg-amber-50/60 p-4">
+                                                                <div className="mb-3 flex items-center gap-2">
+                                                                    <Lightbulb02 className="size-4 text-amber-600" />
+                                                                    <h4 className="font-semibold text-amber-700">Javaslatok</h4>
+                                                                </div>
+                                                                <ul className="space-y-2">
+                                                                    {value.javaslatok.map((javaslat, index) => (
+                                                                        <li key={index} className="flex items-start gap-2 text-[16px] leading-[26px] text-gray-500">
+                                                                            <span className="shrink-0 mt-[9px] text-[8px] leading-none text-amber-500">●</span>
+                                                                            {javaslat}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </>
                                         );
@@ -452,126 +568,217 @@ export default function ResultPage() {
                         </div>
 
                         {/* Color, Typography Analysis - Two column grid */}
-                        <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                            {/* Color Analysis */}
-                            {result.szinek && (
-                                <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
-                                    <div className="mb-5 flex items-center gap-3">
-                                        <Palette className="size-5 text-purple-600" />
-                                        <h3 className="text-xl font-light text-gray-900">Színpaletta elemzés</h3>
-                                    </div>
-                                    <div className="space-y-5">
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.harmonia}</p>
+                        {isLight ? (
+                            /* Light: blurozott szín/tipográfia/vizuális placeholder magyar dummy szöveggel */
+                            <BlurredSection>
+                                <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                                    <div className="rounded-2xl border border-gray-100 bg-white p-6">
+                                        <div className="mb-5 flex items-center gap-3">
+                                            <Palette className="size-5 text-purple-600" />
+                                            <h3 className="text-xl font-light text-gray-900">Színpaletta elemzés</h3>
                                         </div>
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.pszichologia}</p>
-                                        </div>
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-emerald-600">Technikai</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">{result.szinek.technikai}</p>
-                                        </div>
-                                        {result.szinek.javaslatok && result.szinek.javaslatok.length > 0 && (
-                                            <div className="border-t border-gray-100 pt-5">
-                                                <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-purple-600">Javaslatok</h4>
-                                                <ul className="space-y-2">
-                                                    {result.szinek.javaslatok.map((javaslat, index) => (
-                                                        <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
-                                                            <span className="shrink-0 mt-[7px] text-[8px] leading-none text-purple-400">●</span>
-                                                            {javaslat}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                        <div className="space-y-5">
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A logó színvilága harmonikus egyensúlyt teremt az egyes elemek között, kellemes vizuális benyomást keltve. A választott árnyalatok erősítik egymást.</p>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Typography Analysis */}
-                            {result.tipografia && (
-                                <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
-                                    <div className="mb-5 flex items-center gap-3">
-                                        <TypeSquare className="size-5 text-blue-600" />
-                                        <h3 className="text-xl font-light text-gray-900">Tipográfia elemzés</h3>
-                                    </div>
-                                    <div className="space-y-5">
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.karakter}</p>
-                                        </div>
-                                        <div className="border-t border-gray-100 pt-5">
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.olvashatosag}</p>
-                                        </div>
-                                        {result.tipografia.javaslatok && result.tipografia.javaslatok.length > 0 && (
-                                            <div className="border-t border-gray-100 pt-5">
-                                                <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-blue-600">Javaslatok</h4>
-                                                <ul className="space-y-2">
-                                                    {result.tipografia.javaslatok.map((javaslat, index) => (
-                                                        <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
-                                                            <span className="shrink-0 mt-[7px] text-[8px] leading-none text-blue-400">●</span>
-                                                            {javaslat}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A felhasznált színek a célcsoport érzelmi reakcióira is hatással vannak, megbízhatóságot és professzionalizmust sugároznak a befogadó felé.</p>
                                             </div>
-                                        )}
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-emerald-600">Technikai</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A színek nyomtatásban és digitális felületeken egyaránt jól reprodukálhatók, megfelelnek a technikai követelményeknek.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-2xl border border-gray-100 bg-white p-6">
+                                        <div className="mb-5 flex items-center gap-3">
+                                            <TypeSquare className="size-5 text-blue-600" />
+                                            <h3 className="text-xl font-light text-gray-900">Tipográfia elemzés</h3>
+                                        </div>
+                                        <div className="space-y-5">
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A betűtípus karaktere jól illeszkedik a brand személyiségéhez, erősíti az üzenetet és hatékonyan kommunikál a célcsoport felé.</p>
+                                            </div>
+                                            <div className="border-t border-gray-100 pt-5">
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A tipográfia különböző méretekben is megfelelő olvashatóságot biztosít, a betűköz és -súly megfelelően van beállítva.</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                                <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6">
+                                    <div className="mb-5 flex items-center gap-3">
+                                        <LayersThree01 className="size-5 text-teal-600" />
+                                        <h3 className="text-xl font-light text-gray-900">Vizuális nyelv elemzés</h3>
+                                    </div>
+                                    <div className="grid gap-4 sm:grid-cols-3">
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">A geometriai formák tudatos alkalmazása erőt és stabilitást sugároz, jól illeszkedik a brand értékeihez.</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">A grafikai elemek jól strukturáltak, a kompozíció átgondolt és kiegyensúlyozott megjelenést biztosít.</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
+                                            <p className="text-sm leading-relaxed text-gray-500">Az összes vizuális elem egységes stílust alkot, koherens benyomást kelt és jól adaptálható különböző kontextusokban.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </BlurredSection>
+                        ) : (
+                            <>
+                                <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                                    {/* Color Analysis */}
+                                    {result.szinek && (
+                                        <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
+                                            <div className="mb-5 flex items-center gap-3">
+                                                <Palette className="size-5 text-purple-600" />
+                                                <h3 className="text-xl font-light text-gray-900">Színpaletta elemzés</h3>
+                                            </div>
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">{result.szinek.harmonia}</p>
+                                                </div>
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">{result.szinek.pszichologia}</p>
+                                                </div>
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-emerald-600">Technikai</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">{result.szinek.technikai}</p>
+                                                </div>
+                                                {result.szinek.javaslatok && result.szinek.javaslatok.length > 0 && (
+                                                    <div className="border-t border-gray-100 pt-5">
+                                                        <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-purple-600">Javaslatok</h4>
+                                                        <ul className="space-y-2">
+                                                            {result.szinek.javaslatok.map((javaslat, index) => (
+                                                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
+                                                                    <span className="shrink-0 mt-[7px] text-[8px] leading-none text-purple-400">●</span>
+                                                                    {javaslat}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
-                        {/* Visual Language - Full width */}
-                        {result.vizualisNyelv && (
-                            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
-                                <div className="mb-5 flex items-center gap-3">
-                                    <LayersThree01 className="size-5 text-teal-600" />
-                                    <h3 className="text-xl font-light text-gray-900">Vizuális nyelv elemzés</h3>
+                                    {/* Typography Analysis */}
+                                    {result.tipografia && (
+                                        <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
+                                            <div className="mb-5 flex items-center gap-3">
+                                                <TypeSquare className="size-5 text-blue-600" />
+                                                <h3 className="text-xl font-light text-gray-900">Tipográfia elemzés</h3>
+                                            </div>
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.karakter}</p>
+                                                </div>
+                                                <div className="border-t border-gray-100 pt-5">
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">{result.tipografia.olvashatosag}</p>
+                                                </div>
+                                                {result.tipografia.javaslatok && result.tipografia.javaslatok.length > 0 && (
+                                                    <div className="border-t border-gray-100 pt-5">
+                                                        <h4 className="mb-3 text-xs font-medium uppercase tracking-widest text-blue-600">Javaslatok</h4>
+                                                        <ul className="space-y-2">
+                                                            {result.tipografia.javaslatok.map((javaslat, index) => (
+                                                                <li key={index} className="flex items-start gap-2 text-sm leading-relaxed text-gray-500">
+                                                                    <span className="shrink-0 mt-[7px] text-[8px] leading-none text-blue-400">●</span>
+                                                                    {javaslat}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="grid gap-4 sm:grid-cols-3">
-                                    <div>
-                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
-                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.formak}</p>
+
+                                {/* Visual Language - Full width */}
+                                {result.vizualisNyelv && (
+                                    <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300">
+                                        <div className="mb-5 flex items-center gap-3">
+                                            <LayersThree01 className="size-5 text-teal-600" />
+                                            <h3 className="text-xl font-light text-gray-900">Vizuális nyelv elemzés</h3>
+                                        </div>
+                                        <div className="grid gap-4 sm:grid-cols-3">
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.formak}</p>
+                                            </div>
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.elemek}</p>
+                                            </div>
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.stilusEgyseg}</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
-                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.elemek}</p>
-                                    </div>
-                                    <div>
-                                        <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
-                                        <p className="text-sm leading-relaxed text-gray-500">{result.vizualisNyelv.stilusEgyseg}</p>
-                                    </div>
-                                </div>
-                            </div>
+                                )}
+                            </>
                         )}
 
                         {/* CTA */}
-                        <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
-                            <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
-                                brandguide/AI
-                            </span>
-                            <h2 className="mb-3 text-2xl font-light text-white sm:text-3xl">
-                                Szeretnéd továbbfejleszteni a brandedet?
-                            </h2>
-                            <p className="mx-auto mb-8 max-w-xl text-gray-400">
-                                A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
-                            </p>
-                            <a href="https://ai.brandguide.hu/" target="_blank" rel="noopener noreferrer">
-                                <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg">
-                                    Ismerkedj meg a brandguide/AI-jal
+                        {isLight ? (
+                            /* Light: Upgrade CTA */
+                            <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
+                                <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
+                                    MAX elemzés
+                                </span>
+                                <h2 className="mb-3 text-2xl font-light text-white sm:text-3xl">
+                                    Részletes elemzés és javaslatok
+                                </h2>
+                                <p className="mx-auto mb-8 max-w-xl text-gray-400">
+                                    A MAX csomaggal megkapod a teljes szöveges indoklást, konkrét fejlesztési javaslatokat, és a részletes szín-, tipográfia- és vizuális nyelv elemzést.
+                                </p>
+                                <button
+                                    onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
+                                    className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg cursor-pointer"
+                                >
+                                    Teljes elemzés feloldása — 1 990 Ft + ÁFA
                                     <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                     </svg>
                                 </button>
-                            </a>
-                        </div>
+                            </div>
+                        ) : (
+                            /* MAX: brandguide/AI CTA */
+                            <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
+                                <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
+                                    brandguide/AI
+                                </span>
+                                <h2 className="mb-3 text-2xl font-light text-white sm:text-3xl">
+                                    Szeretnéd továbbfejleszteni a brandedet?
+                                </h2>
+                                <p className="mx-auto mb-8 max-w-xl text-gray-400">
+                                    A brandguide/AI segít kidolgozni a teljes brand alapjaidat – a stratégiától a vizuális rendszerig.
+                                </p>
+                                <a href="https://ai.brandguide.hu/" target="_blank" rel="noopener noreferrer">
+                                    <button className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg">
+                                        Ismerkedj meg a brandguide/AI-jal
+                                        <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                    </button>
+                                </a>
+                            </div>
+                        )}
                     </div>
 
                     {/* Sidebar - 4 cols on desktop */}
-                    <div className="mt-8 lg:col-span-4 lg:mt-0">
+                    <div className="mt-8 lg:col-span-4 lg:mt-0 lg:sticky lg:top-8 lg:self-start">
                         <ResultSidebar
                             logoUrl={logoUrl}
                             score={result.osszpontszam}

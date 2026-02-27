@@ -142,7 +142,7 @@ export function TransparentVideo({
     }, [maxSize, threshold]);
 
     return (
-        <div className={className} style={{ width: dimensions.width, height: dimensions.height, position: "relative" }}>
+        <div className={className} style={{ width: dimensions.width, height: dimensions.height, position: "relative", maxWidth: "100%" }}>
             <video
                 ref={videoRef}
                 autoPlay

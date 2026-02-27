@@ -33,7 +33,7 @@ export default function ConfirmPage() {
       // Check for redirect from URL params
       const url = new URL(window.location.href);
       const customRedirect = url.searchParams.get('redirect');
-      // 'pending' = lazy-register flow (ingyenes): pendingAnalysisId → streaming oldal
+      // 'pending' = lazy-register flow (ingyenes): pendingAnalysisId → create → streaming oldal
       const pendingAnalysisId = url.searchParams.get('pending');
       // 'analysis' = régi param (fallback)
       const legacyAnalysisId = url.searchParams.get('analysis');
@@ -42,7 +42,27 @@ export default function ConfirmPage() {
       if (customRedirect) {
         redirectUrl = customRedirect;
       } else if (pendingAnalysisId) {
-        redirectUrl = `/elemzes/feldolgozas/${pendingAnalysisId}`;
+        // Lazy-register flow: create the analysis record first, then redirect to processing
+        try {
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          const createRes = await fetch('/api/analysis/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(currentSession?.access_token ? { 'Authorization': `Bearer ${currentSession.access_token}` } : {}),
+            },
+            body: JSON.stringify({ pendingAnalysisId }),
+          });
+          if (createRes.ok) {
+            const { analysisId } = await createRes.json();
+            redirectUrl = `/elemzes/feldolgozas/${analysisId}`;
+          } else {
+            // Fallback: try with the pending ID directly
+            redirectUrl = `/elemzes/feldolgozas/${pendingAnalysisId}`;
+          }
+        } catch {
+          redirectUrl = `/elemzes/feldolgozas/${pendingAnalysisId}`;
+        }
       } else if (legacyAnalysisId) {
         redirectUrl = `/elemzes/feldolgozas/${legacyAnalysisId}`;
       }

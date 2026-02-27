@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
   if (action === 'all') {
     const { data } = await supabase
       .from('analyses')
-      .select('id, logo_name, creator_name, category, tier, status, visibility, is_weekly_winner, result, created_at, user_id')
+      .select('id, logo_name, creator_name, category, tier, status, visibility, is_weekly_winner, result, created_at, user_id, visual_analysis')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(100);

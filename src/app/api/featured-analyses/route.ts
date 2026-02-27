@@ -15,6 +15,8 @@ interface AnalysisRow {
   id: string;
   logo_name: string | null;
   logo_thumbnail_path: string | null;
+  logo_original_path: string | null;
+  logo_base64: string | null;
   category: string | null;
   result: Record<string, unknown> | null;
   creator_name: string | null;
@@ -63,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     const { data: analysesData, error: analysesError } = await supabase
       .from('analyses')
-      .select('id, logo_name, logo_thumbnail_path, category, result, creator_name')
+      .select('id, logo_name, logo_thumbnail_path, logo_original_path, logo_base64, category, result, creator_name')
       .in('id', analysisIds);
 
     const analyses = analysesData as AnalysisRow[] | null;
@@ -83,8 +85,14 @@ export async function GET(request: NextRequest) {
         const totalScore = result?.osszpiontszam ?? result?.osszpontszam ?? 0;
 
         let logoUrl = '';
-        if (analysis.logo_thumbnail_path) {
-          logoUrl = `${supabaseUrl}/storage/v1/object/public/logos/${analysis.logo_thumbnail_path}`;
+        // base64 prioritás: mindig elérhető, storage URL néha 404-et adhat
+        if (analysis.logo_base64) {
+          logoUrl = `data:image/png;base64,${analysis.logo_base64}`;
+        } else {
+          const logoPath = analysis.logo_thumbnail_path || analysis.logo_original_path;
+          if (logoPath) {
+            logoUrl = `${supabaseUrl}/storage/v1/object/public/logos/${logoPath}`;
+          }
         }
 
         return {

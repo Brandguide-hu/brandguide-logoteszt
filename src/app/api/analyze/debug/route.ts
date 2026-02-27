@@ -5,6 +5,9 @@
 
 import { NextRequest } from 'next/server';
 
+export const runtime = 'nodejs';
+export const maxDuration = 120;
+
 export async function GET(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new TransformStream();

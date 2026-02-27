@@ -4,6 +4,9 @@ import { createHash } from 'crypto';
 
 export const runtime = 'nodejs';
 
+// ⚠️ TESZTELÉSI FLAG: true = limit kikapcsolva, false = normál működés
+const DISABLE_FREE_LIMIT = true;
+
 /**
  * GET /api/user/can-free-analysis
  * v0.91: Rolling 24h limit — IP ÉS email ellenőrzés.
@@ -11,6 +14,9 @@ export const runtime = 'nodejs';
  * - Ha nincs bejelentkezve: csak IP
  */
 export async function GET(request: NextRequest) {
+  if (DISABLE_FREE_LIMIT) {
+    return NextResponse.json({ canUse: true });
+  }
   try {
     const admin = getSupabaseAdmin();
 

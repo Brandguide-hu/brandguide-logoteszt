@@ -1035,6 +1035,126 @@ KRITIKUS: A szempontok tömbben MIND A 7 szempont KÖTELEZŐ! Ne hagyd ki egyike
 }
 
 // ============================================================================
+// LIGHT TIER - Ingyenes elemzés (pontszámok + összefoglaló, részletek nélkül)
+// ============================================================================
+
+/**
+ * Light séma: pontszámok + összefoglaló, de NINCS indoklas/javaslatok/details
+ * Ez a free tier egyetlen kb-extract hívásához.
+ */
+const szempontLightItemSchema = {
+  type: "object" as const,
+  properties: {
+    pont: { type: "integer" as const },
+    maxPont: { type: "integer" as const },
+  },
+  required: ["pont", "maxPont"] as const,
+};
+
+export const KB_EXTRACT_LIGHT_SCHEMA = {
+  type: "object",
+  properties: {
+    scoring: {
+      type: "object",
+      properties: {
+        osszpontszam: { type: "integer" },
+        logotipus: { type: "string", enum: ["klasszikus_logo", "kampany_badge", "illusztracio_jellegu"] },
+        szempontok: {
+          type: "object",
+          properties: {
+            megkulonboztethetoseg: szempontLightItemSchema,
+            egyszeruseg: szempontLightItemSchema,
+            alkalmazhatosag: szempontLightItemSchema,
+            emlekezetesseg: szempontLightItemSchema,
+            idotallosag: szempontLightItemSchema,
+            univerzalitas: szempontLightItemSchema,
+            lathatosag: szempontLightItemSchema,
+          },
+          required: [
+            "megkulonboztethetoseg", "egyszeruseg", "alkalmazhatosag",
+            "emlekezetesseg", "idotallosag", "univerzalitas", "lathatosag"
+          ]
+        },
+      },
+      required: ["osszpontszam", "logotipus", "szempontok"]
+    },
+    summary: {
+      type: "object",
+      properties: {
+        osszegzes: { type: "string" },
+        erossegek: { type: "array", items: { type: "string" } },
+        fejlesztendo: { type: "array", items: { type: "string" } },
+        minosites: { type: "string" },
+      },
+      required: ["osszegzes", "erossegek", "fejlesztendo", "minosites"]
+    }
+  },
+  required: ["scoring", "summary"],
+};
+
+/**
+ * Light pontozási + összefoglaló query (egyetlen kb-extract hívás a free tier-hez)
+ * Tartalmaz: famous logo check, logo definíció, scoring kritériumok + Peti stílusú összefoglaló
+ */
+export function buildLightScoringQuery(): string {
+  return `## LOGÓ DEFINÍCIÓ – KRITIKUS ALAPELV
+
+Egy logó NEM illusztráció. A logó egyszerű, skálázható, időtálló azonosító jel.
+
+### AUTOMATIKUS PONTSZÁM-PLAFON:
+- Ha a logó **illusztráció-komplexitású** (4+ szín gradienssel, apró részletek, 5+ elem) → MAX 55 pont összesen
+- Ha **badge 5+ elemmel** → MAX 55 pont
+- Ha **gradiens + apró részletek együtt** → MAX 45 pont
+- Ha **pixeles, elmosódott** → MAX 35 pont
+
+---
+
+## ÉRTÉKELÉSI SZEMPONTOK – Brandguide 100 pontos rendszer
+
+| Pontszám | Minőség |
+|----------|---------|
+| 85-100 | Világszínvonalú, ikonikus |
+| 70-84 | Professzionális, jól működik |
+| 55-69 | Működőképes, fejlesztésre szorul |
+| 40-54 | Jelentős problémák |
+| 0-39 | Alapvető koncepcionális gondok |
+
+### Szempontok:
+- **MEGKÜLÖNBÖZTETHETŐSÉG** (max 20 pont): Egyedi, összetéveszthetetlen-e?
+- **EGYSZERŰSÉG** (max 18 pont): Kevés elem, tiszta struktúra?
+- **ALKALMAZHATÓSÁG** (max 15 pont): Bármilyen méretben működik?
+- **EMLÉKEZETESSÉG** (max 15 pont): Bevésődik-e az emlékezetbe?
+- **IDŐTÁLLÓSÁG** (max 12 pont): 10-20 évig is modern lesz-e?
+- **UNIVERZALITÁS** (max 10 pont): Kulturálisan semleges, globálisan működik?
+- **LÁTHATÓSÁG** (max 10 pont): Jó kontraszt, távolról is felismerhető?
+
+---
+
+${PETI_STYLE_BLOCK}
+
+## ÖSSZEFOGLALÓ KÉSZÍTÉSE – "Peti mentori értékelés"
+
+Írj 3-5 mondatos ŐSZINTE, személyes hangú értékelést a logóról (max 600 karakter).
+Úgy írj, mintha egy tapasztalt branding mentor mondaná el a véleményét egy barátságos konzultáción.
+
+### STÍLUSJEGYEK:
+- **Rögtön a lényegre térj** – az első mondat a konkrét logóról szóljon
+- **Rövid, lendületes mondatok**: "A titok? Nincs benne felesleges elem."
+- **Félkövér kiemelés** a legfontosabb megállapításnál (markdown **félkövér**)
+
+Erősségek és fejlesztendő területek: max 3-3 db, RÖVID 2-5 szavas bullet-ek.
+
+Minősítés (minosites mező): "Kiváló", "Jó minőségű", "Közepes", "Fejlesztésre szorul", "Újratervezés javasolt"
+
+---
+
+[Feladat]
+A logó leírása az image_description mezőben található. Add meg a Brandguide pontozást (CSAK pont és maxPont, indoklás/javaslatok NÉLKÜL) és az összefoglalót!
+
+KRITIKUS: MIND A 7 szempont KÖTELEZŐ: megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag.`;
+}
+
+// ============================================================================
 // HELPER FUNCTIONS (legacy - régi partner-api-hoz)
 // ============================================================================
 
