@@ -27,6 +27,7 @@ import {
   KB_EXTRACT_SCORING_SCHEMA,
   KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
   getRatingFromScore,
+  isValidTextItem,
 } from '@/lib/prompts-v2';
 
 // ============================================================================
@@ -265,8 +266,8 @@ export async function POST(request: NextRequest) {
         minosites,
         szempontok: clampedSzempontok,
         osszegzes: rawSummary.osszegzes || '',
-        erossegek: Array.isArray(rawSummary.erossegek) ? rawSummary.erossegek.filter(e => e && e.length > 0) : [],
-        fejlesztendo: Array.isArray(rawSummary.fejlesztendo) ? rawSummary.fejlesztendo.filter(f => f && f.length > 0) : [],
+        erossegek: Array.isArray(rawSummary.erossegek) ? rawSummary.erossegek.filter(isValidTextItem) : [],
+        fejlesztendo: Array.isArray(rawSummary.fejlesztendo) ? rawSummary.fejlesztendo.filter(isValidTextItem) : [],
         szinek: {
           harmonia: rawDetails.szinek?.harmonia || '',
           pszichologia: rawDetails.szinek?.pszichologia || '',

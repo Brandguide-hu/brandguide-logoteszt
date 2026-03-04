@@ -72,7 +72,7 @@ const phaseLabels: Record<Phase, string> = {
   brandguide_analysis: 'Pontozás',
   comparing: 'Feldolgozás',
   processing: 'Részletek',
-  visual: 'Összegzés',
+  visual: 'Vizuális elemzés',
   saving: 'Mentés',
   complete: 'Kész',
 };
@@ -89,6 +89,8 @@ const ANALYSIS_SUBSTEPS = [
   { pct: 54, label: 'Időtállóság értékelése...' },
   { pct: 60, label: 'Univerzalitás ellenőrzése...' },
   { pct: 65, label: 'Láthatóság vizsgálata...' },
+  { pct: 72, label: 'Vizuális elemzés készítése...' },
+  { pct: 80, label: 'Színvakság szimulációk...' },
 ];
 
 function FeldolgozasContent() {
@@ -220,10 +222,10 @@ function FeldolgozasContent() {
             setTimeout(() => {
               router.push(`/eredmeny/${analysisId}`);
             }, 500);
-          } else if (pollData.status === 'error') {
+          } else if (pollData.status === 'failed' || pollData.status === 'error') {
             clearInterval(pollInterval);
-            addDebugLog(`Poll: HIBA! ${pollData.error_message || 'Ismeretlen hiba'}`);
-            setError(pollData.error_message || 'Az elemzés során hiba történt. Kérlek próbáld újra.');
+            addDebugLog(`Poll: HIBA! status=${pollData.status}`);
+            setError('Az elemzés során hiba történt. Kérlek próbáld újra.');
           }
         }
       } catch {
@@ -336,8 +338,8 @@ function FeldolgozasContent() {
   // SSE Stream kezelés - MAX tier
   // Vision SSE (~22s, <60s limit) → Background function trigger → Polling
   // A scoring+summary Netlify background function-ben fut (15 perc limit)
-  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string) => {
-    addDebugLog(`MAX SSE indítás (vision+background): analysisId=${analysisId}, mediaType=${mediaType}`);
+  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string, tier?: string) => {
+    addDebugLog(`MAX SSE indítás (vision+background): analysisId=${analysisId}, mediaType=${mediaType}, tier=${tier}`);
 
     // ========================================
     // STEP 1: Vision SSE (~22s) — szinkron, <60s
@@ -449,7 +451,7 @@ function FeldolgozasContent() {
     const triggerResponse = await fetch('/api/analyze/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visionDescription, logo, analysisId }),
+      body: JSON.stringify({ visionDescription, logo, analysisId, tier }),
     });
 
     addDebugLog(`Trigger HTTP: ${triggerResponse.status}`);
@@ -490,8 +492,10 @@ function FeldolgozasContent() {
         return;
       }
 
-      // Logó thumbnail beállítása
-      if (analysisData.logo_thumbnail_path) {
+      // Logó thumbnail beállítása — base64 elsődleges (mindig elérhető), storage URL fallback
+      if (analysisData.logo_base64) {
+        setLogoThumbnail(`data:image/png;base64,${analysisData.logo_base64}`);
+      } else if (analysisData.logo_thumbnail_path) {
         const thumbUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logos/${analysisData.logo_thumbnail_path}`;
         setLogoThumbnail(thumbUrl);
       }
@@ -511,6 +515,10 @@ function FeldolgozasContent() {
               setTimeout(() => {
                 router.push(`/eredmeny/${analysisId}`);
               }, 500);
+            } else if (pollData.status === 'failed' || pollData.status === 'error') {
+              clearInterval(pollInterval);
+              addDebugLog(`Poll: HIBA! status=${pollData.status}`);
+              setError('Az elemzés során hiba történt. Kérlek próbáld újra.');
             }
           }
         }, 2000);
@@ -537,8 +545,8 @@ function FeldolgozasContent() {
           else if (ext === 'webp') mediaType = 'image/webp';
         }
 
-        addDebugLog(`MAX SSE mód: status=${analysisData.status}, mediaType=${mediaType}`);
-        await runAnalysisWithSSE(analysisData.logo_base64, mediaType);
+        addDebugLog(`MAX SSE mód: status=${analysisData.status}, mediaType=${mediaType}, tier=${analysisData.tier}`);
+        await runAnalysisWithSSE(analysisData.logo_base64, mediaType, analysisData.tier);
         return;
       }
 
@@ -567,6 +575,9 @@ function FeldolgozasContent() {
             setTimeout(() => {
               router.push(`/eredmeny/${analysisId}`);
             }, 500);
+          } else if (pollData.status === 'failed' || pollData.status === 'error') {
+            clearInterval(pollInterval);
+            setError('Az elemzés során hiba történt. Kérlek próbáld újra.');
           }
         }
       }, 2000);
@@ -638,6 +649,10 @@ function FeldolgozasContent() {
                 src={logoThumbnail}
                 alt="Logo"
                 className="max-h-full max-w-full object-contain opacity-0 animate-[fadeIn_0.5s_ease_forwards]"
+                onError={(e) => {
+                  // Ha a thumbnail URL 404-et ad, elrejtjük a broken image-et
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
               />
             </div>
           )}

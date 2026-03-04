@@ -27,6 +27,7 @@ import {
   buildLightScoringQuery,
   KB_EXTRACT_LIGHT_SCHEMA,
   getRatingFromScore,
+  isValidTextItem,
 } from '@/lib/prompts-v2';
 
 // ============================================================================
@@ -261,8 +262,8 @@ export async function POST(request: NextRequest) {
         osszpontszam,
         minosites,
         osszegzes: lightData.summary.osszegzes || '',
-        erossegek: Array.isArray(lightData.summary.erossegek) ? lightData.summary.erossegek.filter(e => e && e.length > 0) : [],
-        fejlesztendo: Array.isArray(lightData.summary.fejlesztendo) ? lightData.summary.fejlesztendo.filter(f => f && f.length > 0) : [],
+        erossegek: Array.isArray(lightData.summary.erossegek) ? lightData.summary.erossegek.filter(isValidTextItem) : [],
+        fejlesztendo: Array.isArray(lightData.summary.fejlesztendo) ? lightData.summary.fejlesztendo.filter(isValidTextItem) : [],
         szempontok: clampedSzempontok,
         logoTipus: lightData.scoring.logotipus,
         testLevel: 'basic',

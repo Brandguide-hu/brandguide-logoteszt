@@ -10,6 +10,20 @@
 import { Rating } from '@/types';
 
 // ============================================================================
+// UTILS
+// ============================================================================
+
+/** Ellenőrzi, hogy egy string valós tartalom-e (nem JSON fragmentum és nem csonka mondat).
+ *  KB-Extract best_effort mód alatt előfordulhat, hogy a válasz levágódik és
+ *  JSON töredékek kerülnek a string tömb mezőkbe (erossegek, fejlesztendo). */
+export function isValidTextItem(s: unknown): s is string {
+  if (typeof s !== 'string') return false;
+  if (s.length < 10) return false;
+  if (s.includes('":{') || s.includes('":[') || s.includes('":\"')) return false;
+  return true;
+}
+
+// ============================================================================
 // CLAUDE VISION PROMPT - "Vakvezető Designer"
 // ============================================================================
 

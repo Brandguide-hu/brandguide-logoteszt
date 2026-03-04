@@ -136,10 +136,25 @@ function useTransparentLogo(logoUrl: string): string | null {
 export function BackgroundTests({ logoUrl, dominantColors }: BackgroundTestsProps) {
   const transparentLogoUrl = useTransparentLogo(logoUrl);
 
-  // Primary foreground color = dominant color with highest percentage (skip near-white/near-black)
-  const fgColor = dominantColors.find(c => c.hsl.l > 10 && c.hsl.l < 90)?.hex
-    || dominantColors[0]?.hex
-    || '#000000';
+  // Legdominánsabb NEM-háttér szín — kiszűrjük a közel-fehér/fekete színeket
+  // (azok általában a logó háttere/átlátszó része, nem a tényleges logó szín)
+  const isBackgroundColor = (hex: string): boolean => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const isNearWhite = r > 230 && g > 230 && b > 230;
+    const isNearBlack = r < 25 && g < 25 && b < 25;
+    return isNearWhite || isNearBlack;
+  };
+
+  // Szűrt domináns színek — közel-fehér/fekete kiszűrve (azok háttérszínek)
+  const logoColors = [...dominantColors]
+    .filter(c => !isBackgroundColor(c.hex))
+    .sort((a, b) => b.percentage - a.percentage);
+
+  // Előre kiszámolt: legsötétebb és legvilágosabb logó szín
+  const darkestLogoColor = [...logoColors].sort((a, b) => hexToLuminance(a.hex) - hexToLuminance(b.hex))[0] ?? null;
+  const lightestLogoColor = [...logoColors].sort((a, b) => hexToLuminance(b.hex) - hexToLuminance(a.hex))[0] ?? null;
 
   // Add dominant colors as backgrounds too
   const allBackgrounds = [
@@ -159,7 +174,11 @@ export function BackgroundTests({ logoUrl, dominantColors }: BackgroundTestsProp
 
       <div className="grid grid-cols-2 gap-2">
         {allBackgrounds.slice(0, 6).map((bg, idx) => {
-          const ratio = getContrastRatio(fgColor, bg.color);
+          // Háttér fényessége alapján döntünk: melyik logó szín a releváns foreground
+          const bgLuminance = hexToLuminance(bg.color);
+          // Világos háttér → sötét logó szín a kontraszt, sötét háttér → világos logó szín
+          const foregroundColor = bgLuminance > 0.5 ? darkestLogoColor : lightestLogoColor;
+          const ratio = foregroundColor ? getContrastRatio(foregroundColor.hex, bg.color) : 1;
           const passes = ratio >= 3;
           return (
             <div key={idx} className="space-y-1">
@@ -172,14 +191,20 @@ export function BackgroundTests({ logoUrl, dominantColors }: BackgroundTestsProp
                   alt={`Logó ${bg.label} háttéren`}
                   className="max-w-full max-h-full object-contain"
                 />
-                {/* Contrast badge */}
+                {/* Contrast badge — szín dot + arány */}
                 <div
-                  className={`absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+                  className={`absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
                     passes
                       ? 'bg-emerald-100/90 text-emerald-700'
                       : 'bg-red-100/90 text-red-600'
                   }`}
                 >
+                  {foregroundColor && (
+                    <span
+                      className="inline-block size-2.5 rounded-full border border-black/20 shrink-0"
+                      style={{ backgroundColor: foregroundColor.hex }}
+                    />
+                  )}
                   {passes ? '✓' : '✗'}
                   <span className="font-mono">{ratio}:1</span>
                 </div>

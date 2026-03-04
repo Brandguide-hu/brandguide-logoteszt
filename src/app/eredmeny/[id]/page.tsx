@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { AnalysisResult, CRITERIA_META, CriteriaName } from "@/types";
+import { AnalysisResult, CRITERIA_META, CriteriaName, VisualAnalysis } from "@/types";
 import {
     RadarChart,
     ResultSkeleton,
@@ -16,6 +16,8 @@ import {
     Palette, TypeSquare, LayersThree01,
 } from "@untitledui/icons";
 import { Header } from "@/components/layout/Header";
+import { GeometryPanel } from "@/components/analysis/visual/GeometryPanel";
+import { ColorVisualization } from "@/components/analysis/visual/ColorVisualization";
 import { ComponentType, SVGAttributes } from "react";
 
 // Markdown bold (**text**) → <strong> konverzió
@@ -60,6 +62,7 @@ export default function ResultPage() {
     const [tier, setTier] = useState<string | null>(null);
     const [createdAt, setCreatedAt] = useState<string | null>(null);
     const [testLevel, setTestLevel] = useState<string | null>(null);
+    const [visualAnalysis, setVisualAnalysis] = useState<VisualAnalysis | null>(null);
 
     // Check auth state for breadcrumb
     useEffect(() => {
@@ -104,6 +107,12 @@ export default function ResultPage() {
 
                 const resultData = data.result as unknown as AnalysisResult;
 
+                // Check if analysis failed
+                if (data.status === 'failed') {
+                    setError('Az elemzés sikertelen volt. Kérjük, próbáld újra.');
+                    return;
+                }
+
                 // Check if analysis is still processing (result is empty {})
                 if (!resultData || !resultData.osszpontszam) {
                     setResult(null);
@@ -121,6 +130,9 @@ export default function ResultPage() {
                 setTier(data.tier || null);
                 setCreatedAt(data.created_at || null);
                 setTestLevel(data.test_level || null);
+                if (data.visual_analysis) {
+                    setVisualAnalysis(data.visual_analysis as VisualAnalysis);
+                }
                 animateScore(resultData.osszpontszam);
             } catch (err) {
                 console.error("Fetch error:", err);
@@ -141,10 +153,23 @@ export default function ResultPage() {
                 const res = await fetch(`/api/result/${id}?t=${Date.now()}`, { cache: 'no-store' });
                 if (!res.ok) return;
                 const data = await res.json();
+                if (data.status === 'failed') {
+                    setError('Az elemzés sikertelen volt. Kérjük, próbáld újra.');
+                    return;
+                }
                 const resultData = data.result as unknown as AnalysisResult;
                 if (resultData && resultData.osszpontszam) {
                     setResult(resultData);
                     setLogoUrl(`data:image/png;base64,${data.logo_base64}`);
+                    setTier(data.tier || null);
+                    setCreatedAt(data.created_at || null);
+                    setTestLevel(data.test_level || null);
+                    setLogoName(data.logo_name || null);
+                    setCreatorName(data.creator_name || null);
+                    setCategory(data.category || null);
+                    if (data.visual_analysis) {
+                        setVisualAnalysis(data.visual_analysis as VisualAnalysis);
+                    }
                     animateScore(resultData.osszpontszam);
                 }
             } catch {
@@ -153,6 +178,34 @@ export default function ResultPage() {
         }, 5000);
         return () => clearInterval(interval);
     }, [loading, error, result, id, animateScore]);
+
+    // Auto-trigger visual analysis (lazy) — only for paid/consultation, when scoring is done but visual missing
+    useEffect(() => {
+        if (!result || !tier || visualAnalysis) return;
+        if (tier !== 'paid' && tier !== 'consultation') return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/analyze/visual-trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ analysisId: id }),
+                });
+                if (!res.ok || cancelled) return;
+                const triggerData = await res.json();
+                if (cancelled) return;
+                // Re-fetch to get the newly generated visual_analysis (cache-bust!)
+                const updated = await fetch(`/api/result/${id}?t=${Date.now()}`, { cache: 'no-store' });
+                if (!updated.ok || cancelled) return;
+                const updatedData = await updated.json();
+                if (updatedData.visual_analysis) {
+                    setVisualAnalysis(updatedData.visual_analysis as VisualAnalysis);
+                }
+            } catch { /* silent — visual is optional enhancement */ }
+        })();
+        return () => { cancelled = true; };
+    }, [result, tier, visualAnalysis, id]);
 
     // Loading state - show skeleton UI
     if (loading) {
@@ -358,9 +411,9 @@ export default function ResultPage() {
                                             <CheckCircle className="size-5 text-emerald-600" />
                                             <h3 className="font-semibold text-emerald-800">Erősségek</h3>
                                         </div>
-                                        {result.erossegek && result.erossegek.length > 0 ? (
+                                        {result.erossegek && result.erossegek.filter(e => typeof e === 'string' && e.length >= 10 && !e.includes('":{') && !e.includes('":[') && !e.includes('":\"')).length > 0 ? (
                                             <ul className="space-y-2">
-                                                {result.erossegek.map((item, index) => (
+                                                {result.erossegek.filter(e => typeof e === 'string' && e.length >= 10 && !e.includes('":{') && !e.includes('":[') && !e.includes('":\"')).map((item, index) => (
                                                     <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
                                                         <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
                                                         {item}
@@ -377,9 +430,9 @@ export default function ResultPage() {
                                             <AlertTriangle className="size-5 text-amber-600" />
                                             <h3 className="font-semibold text-amber-800">Fejlesztendő</h3>
                                         </div>
-                                        {result.fejlesztendo && result.fejlesztendo.length > 0 ? (
+                                        {result.fejlesztendo && result.fejlesztendo.filter(f => typeof f === 'string' && f.length >= 10 && !f.includes('":{') && !f.includes('":[') && !f.includes('":\"')).length > 0 ? (
                                             <ul className="space-y-2">
-                                                {result.fejlesztendo.map((item, index) => (
+                                                {result.fejlesztendo.filter(f => typeof f === 'string' && f.length >= 10 && !f.includes('":{') && !f.includes('":[') && !f.includes('":\"')).map((item, index) => (
                                                     <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
                                                         <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
                                                         {item}
@@ -401,6 +454,11 @@ export default function ResultPage() {
                             </h2>
                             <RadarChart result={result} />
                         </div>
+
+                        {/* Geometria elemzés — csak MAX/Ultra, ha van vizuális adat */}
+                        {visualAnalysis && !isLight && (
+                            <GeometryPanel data={visualAnalysis.geometry} logoUrl={logoUrl || ''} />
+                        )}
 
                         {/* Criteria Details - Tabbed layout */}
                         <div className="mb-6">
@@ -703,6 +761,11 @@ export default function ResultPage() {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Szín vizualizációk — csak ha van vizuális adat */}
+                                {visualAnalysis && (
+                                    <ColorVisualization data={visualAnalysis.colors} logoUrl={logoUrl || ''} />
+                                )}
 
                                 {/* Visual Language - Full width */}
                                 {result.vizualisNyelv && (

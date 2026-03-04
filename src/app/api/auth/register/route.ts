@@ -74,6 +74,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Subscribe to MailerLite (fire-and-forget)
+    if (process.env.MAILERLITE_API_KEY) {
+      fetch('https://connect.mailerlite.com/api/subscribers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.MAILERLITE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase(),
+          fields: { name: name.trim() },
+          groups: process.env.MAILERLITE_GROUP_ID ? [process.env.MAILERLITE_GROUP_ID] : [],
+        }),
+      }).catch(() => {});
+    }
+
     // Generate magic link for email verification
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({

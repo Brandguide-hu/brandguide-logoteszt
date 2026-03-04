@@ -10,7 +10,7 @@ export async function GET(
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('analyses')
-      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier')
+      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier, visual_analysis')
       .eq('id', id)
       .single();
 
@@ -21,9 +21,11 @@ export async function GET(
       );
     }
 
-    // Only cache completed analyses (with actual result data)
+    // Only cache fully completed analyses (scoring + visual analysis for paid tiers)
     const isCompleted = data.result && typeof data.result === 'object' && 'osszpontszam' in data.result;
-    const cacheControl = isCompleted ? 'public, max-age=3600' : 'no-store';
+    const isPaidTier = data.tier === 'paid' || data.tier === 'consultation';
+    const isFullyComplete = isCompleted && (!isPaidTier || data.visual_analysis);
+    const cacheControl = isFullyComplete ? 'public, max-age=3600' : 'no-store';
 
     // Return clean JSON response
     return NextResponse.json({
@@ -39,6 +41,7 @@ export async function GET(
       creator_name: data.creator_name,
       category: data.category,
       tier: data.tier,
+      visual_analysis: data.visual_analysis,
       result_url: `https://logolab.hu/eredmeny/${data.id}`,
     }, {
       headers: {

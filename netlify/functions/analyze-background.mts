@@ -78,6 +78,14 @@ const MAX_VALUES: Record<string, number> = {
   lathatosag: 10,
 };
 
+/** Ellenőrzi, hogy egy string valós tartalom-e (nem JSON fragmentum és nem csonka mondat) */
+function isValidTextItem(s: unknown): s is string {
+  if (typeof s !== 'string') return false;
+  if (s.length < 10) return false;
+  if (s.includes('":{') || s.includes('":[') || s.includes('":\"')) return false;
+  return true;
+}
+
 function getRatingFromScore(score: number): string {
   if (score >= 90) return 'Kiváló';
   if (score >= 75) return 'Jó';
@@ -302,10 +310,11 @@ export default async (request: Request, context: Context) => {
 
   try {
     const body = await request.json();
-    const { visionDescription, logo, analysisId } = body as {
+    const { visionDescription, logo, analysisId, tier } = body as {
       visionDescription: string;
       logo: string;
       analysisId?: string;
+      tier?: string;
     };
 
     if (!visionDescription) {
@@ -383,8 +392,8 @@ export default async (request: Request, context: Context) => {
       minosites,
       szempontok,
       osszegzes: rawSummary?.osszegzes || '',
-      erossegek: Array.isArray(rawSummary?.erossegek) ? rawSummary.erossegek.filter((e: string) => e?.length > 0) : [],
-      fejlesztendo: Array.isArray(rawSummary?.fejlesztendo) ? rawSummary.fejlesztendo.filter((f: string) => f?.length > 0) : [],
+      erossegek: Array.isArray(rawSummary?.erossegek) ? rawSummary.erossegek.filter(isValidTextItem) : [],
+      fejlesztendo: Array.isArray(rawSummary?.fejlesztendo) ? rawSummary.fejlesztendo.filter(isValidTextItem) : [],
       szinek: {
         harmonia: rawDetails?.szinek?.harmonia || '',
         pszichologia: rawDetails?.szinek?.pszichologia || '',
@@ -421,6 +430,28 @@ export default async (request: Request, context: Context) => {
       console.log(`[BG-ANALYZE] Inserted new analysis ${newId}`);
     }
 
+    // Visual analysis trigger for paid/consultation tiers
+    if (analysisId && (tier === 'paid' || tier === 'consultation')) {
+      console.log(`[BG-ANALYZE] Triggering visual analysis for tier=${tier}...`);
+      try {
+        const siteUrl = process.env.URL || 'https://logolab.hu';
+        const visualRes = await fetch(`${siteUrl}/api/analyze/visual-trigger`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysisId }),
+        });
+        if (visualRes.ok) {
+          const visualData = await visualRes.json();
+          console.log(`[BG-ANALYZE] Visual analysis done:`, visualData);
+        } else {
+          console.error(`[BG-ANALYZE] Visual analysis failed: ${visualRes.status}`);
+        }
+      } catch (visualErr) {
+        console.error('[BG-ANALYZE] Visual analysis error:', visualErr);
+        // Non-fatal — scoring is already saved
+      }
+    }
+
     console.log('[BG-ANALYZE] Done!');
   } catch (error) {
     console.error('[BG-ANALYZE] Fatal error:', error);
@@ -438,10 +469,7 @@ export default async (request: Request, context: Context) => {
             'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             'Prefer': 'return=minimal',
           },
-          body: JSON.stringify({
-            status: 'error',
-            error_message: error instanceof Error ? error.message : 'Ismeretlen hiba',
-          }),
+          body: JSON.stringify({ status: 'failed' }),
         });
       }
     } catch { /* ignore cleanup errors */ }
