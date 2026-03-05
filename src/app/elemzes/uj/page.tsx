@@ -31,6 +31,7 @@ function NewAnalysisContent() {
   const [creatorName, setCreatorName] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
   const [email, setEmail] = useState('');
+  const [brief, setBrief] = useState('');
   const [aszfAccepted, setAszfAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,7 @@ function NewAnalysisContent() {
         if (data.logo_name) setLogoName(data.logo_name);
         if (data.creator_name) setCreatorName(data.creator_name);
         if (data.category) setCategory(data.category as Category);
+        if (data.brief) setBrief(data.brief);
 
         // Convert base64 to File object
         if (data.logo_base64) {
@@ -176,6 +178,7 @@ function NewAnalysisContent() {
       if (category) formData.append('category', category);
       if (email) formData.append('email', email);
       if (user?.id) formData.append('userId', user.id);
+      if (brief.trim()) formData.append('brief', brief.trim());
 
       const prepareRes = await fetch('/api/analysis/prepare', {
         method: 'POST',
@@ -438,12 +441,14 @@ function NewAnalysisContent() {
                 creatorName={creatorName}
                 category={category}
                 email={email}
+                brief={brief}
                 aszfAccepted={aszfAccepted}
                 isLoggedIn={!!user}
                 onLogoNameChange={setLogoName}
                 onCreatorNameChange={setCreatorName}
                 onCategoryChange={setCategory}
                 onEmailChange={setEmail}
+                onBriefChange={setBrief}
                 onAszfChange={setAszfAccepted}
               />
             </div>

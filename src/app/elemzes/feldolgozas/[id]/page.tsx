@@ -338,7 +338,7 @@ function FeldolgozasContent() {
   // SSE Stream kezelés - MAX tier
   // Vision SSE (~22s, <60s limit) → Background function trigger → Polling
   // A scoring+summary Netlify background function-ben fut (15 perc limit)
-  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string, tier?: string) => {
+  const runAnalysisWithSSE = useCallback(async (logo: string, mediaType: string, tier?: string, brief?: string | null) => {
     addDebugLog(`MAX SSE indítás (vision+background): analysisId=${analysisId}, mediaType=${mediaType}, tier=${tier}`);
 
     // ========================================
@@ -351,7 +351,7 @@ function FeldolgozasContent() {
     const visionResponse = await fetch('/api/analyze/vision', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logo, mediaType }),
+      body: JSON.stringify({ logo, mediaType, brief }),
     });
 
     addDebugLog(`Vision HTTP: ${visionResponse.status}`);
@@ -451,7 +451,7 @@ function FeldolgozasContent() {
     const triggerResponse = await fetch('/api/analyze/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visionDescription, logo, analysisId, tier }),
+      body: JSON.stringify({ visionDescription, logo, analysisId, tier, brief }),
     });
 
     addDebugLog(`Trigger HTTP: ${triggerResponse.status}`);
@@ -546,7 +546,7 @@ function FeldolgozasContent() {
         }
 
         addDebugLog(`MAX SSE mód: status=${analysisData.status}, mediaType=${mediaType}, tier=${analysisData.tier}`);
-        await runAnalysisWithSSE(analysisData.logo_base64, mediaType, analysisData.tier);
+        await runAnalysisWithSSE(analysisData.logo_base64, mediaType, analysisData.tier, analysisData.brief);
         return;
       }
 

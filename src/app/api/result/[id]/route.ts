@@ -10,7 +10,7 @@ export async function GET(
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('analyses')
-      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier, visual_analysis')
+      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier, visual_analysis, brief')
       .eq('id', id)
       .single();
 
@@ -27,6 +27,15 @@ export async function GET(
     const isFullyComplete = isCompleted && (!isPaidTier || data.visual_analysis);
     const cacheControl = isFullyComplete ? 'public, max-age=3600' : 'no-store';
 
+    // Percentile calculation via RPC
+    let topPercent: number | null = null;
+    const resultObj = data.result as Record<string, unknown> | null;
+    if (resultObj?.osszpontszam && typeof resultObj.osszpontszam === 'number') {
+      const { data: percData } = await getSupabaseAdmin()
+        .rpc('get_score_percentile', { target_score: Math.round(resultObj.osszpontszam as number) });
+      topPercent = typeof percData === 'number' ? percData : null;
+    }
+
     // Return clean JSON response
     return NextResponse.json({
       id: data.id,
@@ -42,6 +51,8 @@ export async function GET(
       category: data.category,
       tier: data.tier,
       visual_analysis: data.visual_analysis,
+      brief: data.brief,
+      top_percent: topPercent,
       result_url: `https://logolab.hu/eredmeny/${data.id}`,
     }, {
       headers: {

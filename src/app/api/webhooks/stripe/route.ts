@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
           stripe_checkout_session_id: session.id,
           stripe_amount: session.amount_total,
           test_level: 'detailed',
+          brief: pending.brief || null,
         });
 
       if (createAnalysisError) {

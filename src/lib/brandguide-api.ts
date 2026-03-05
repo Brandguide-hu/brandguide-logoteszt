@@ -24,7 +24,8 @@ export async function analyzeImageWithVision(
   imageBase64: string,
   mediaType: string,
   userColors?: string[],
-  userFontName?: string
+  userFontName?: string,
+  brief?: string | null
 ): Promise<string> {
   const apiKey = process.env.CLAUDE_VISION_API_KEY;
   if (!apiKey) {
@@ -32,12 +33,13 @@ export async function analyzeImageWithVision(
   }
 
   const anthropic = new Anthropic({ apiKey });
-  const visionPrompt = buildVisionPrompt(userColors, userFontName);
+  const visionPrompt = buildVisionPrompt(userColors, userFontName, brief);
 
   console.log('[VISION] Analyzing image with Claude Vision (Vakvezető Designer)...');
   console.log('[VISION] Using model:', CLAUDE_MODEL);
   if (userColors?.length) console.log('[VISION] User colors:', userColors.join(', '));
   if (userFontName) console.log('[VISION] User font name:', userFontName);
+  if (brief) console.log('[VISION] Brief provided, length:', brief.length);
 
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,

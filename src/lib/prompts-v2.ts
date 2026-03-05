@@ -169,11 +169,20 @@ Minden hibát, ami nem szándékos design döntésnek tűnik, részletesen írj 
 /**
  * Build Vision prompt with user inputs
  */
-export function buildVisionPrompt(userColors?: string[], userFontName?: string): string {
+export function buildVisionPrompt(userColors?: string[], userFontName?: string, brief?: string | null): string {
   let prompt = VISION_PROMPT_BASE;
 
   // Insert user info section before "A LEÍRÁS HÁROM RÉTEGE"
   let userInfoSection = '';
+
+  if (brief) {
+    userInfoSection += `
+## DESIGNER BRIEF
+A feltöltő az alábbi kontextust adta meg a logóhoz:
+"${brief}"
+Vedd figyelembe a leírásban — jelezd, ha a vizuális megjelenés összhangban van (vagy nincs) a megadott szándékkal.
+`;
+  }
 
   if (userColors && userColors.length > 0) {
     userInfoSection += `

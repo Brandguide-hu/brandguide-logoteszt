@@ -258,8 +258,8 @@ const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
 // QUERIES (inline — a prompts-v2.ts-ből)
 // ============================================================================
 
-function buildScoringQuery(): string {
-  return `Értékeld a logót az alábbi 7 szempont szerint. Minden szemponthoz adj pontszámot, indoklást és javaslatokat.
+function buildScoringQuery(brief?: string | null): string {
+  let query = `Értékeld a logót az alábbi 7 szempont szerint. Minden szemponthoz adj pontszámot, indoklást és javaslatokat.
 
 SZEMPONTOK (zárójelben a maximális pont):
 1. Megkülönböztethetőség (max 20 pont) – Mennyire egyedi és felismerhető?
@@ -274,10 +274,20 @@ Azonosítsd a logó típusát: klasszikus_logo, kampany_badge, vagy illusztracio
 Ha híres/ismert logóról van szó, add meg a márkát, tervezőt és kontextust.
 
 FONTOS: Az összpontszám a 7 szempont pontjainak összege legyen (max 100).`;
+
+  if (brief) {
+    query += `
+
+## DESIGNER BRIEF
+A feltöltő kontextusa: "${brief}"
+Értékeld, mennyire teljesíti a logó a kitűzött célt.`;
+  }
+
+  return query;
 }
 
-function buildSummaryQuery(): string {
-  return `Készíts részletes elemzést a logóról az alábbi szempontok alapján:
+function buildSummaryQuery(brief?: string | null): string {
+  let query = `Készíts részletes elemzést a logóról az alábbi szempontok alapján:
 
 1. ÖSSZEGZÉS: Írj egy átfogó, 3-5 mondatos értékelést a logóról.
 2. ERŐSSÉGEK: Sorold fel a logó 3-5 legfontosabb erősségét.
@@ -299,6 +309,16 @@ function buildSummaryQuery(): string {
    - Elemek: Ikonok, szimbólumok, grafikai elemek
    - Stílusegység: Az elemek koherenciája
    - Javaslatok: Vizuális nyelvvel kapcsolatos konkrét javaslatok`;
+
+  if (brief) {
+    query += `
+
+## DESIGNER BRIEF
+A feltöltő kontextusa: "${brief}"
+Értékeld, mennyire teljesíti a logó a kitűzött célt.`;
+  }
+
+  return query;
 }
 
 // ============================================================================
@@ -310,11 +330,12 @@ export default async (request: Request, context: Context) => {
 
   try {
     const body = await request.json();
-    const { visionDescription, logo, analysisId, tier } = body as {
+    const { visionDescription, logo, analysisId, tier, brief } = body as {
       visionDescription: string;
       logo: string;
       analysisId?: string;
       tier?: string;
+      brief?: string | null;
     };
 
     if (!visionDescription) {
@@ -344,9 +365,11 @@ export default async (request: Request, context: Context) => {
     console.log('[BG-ANALYZE] Starting parallel KB-Extract calls...');
     const startTime = Date.now();
 
+    if (brief) console.log('[BG-ANALYZE] Brief provided, length:', brief.length);
+
     const [scoringResult, summaryResult] = await Promise.all([
-      kbExtract(buildScoringQuery(), visionDescription, KB_EXTRACT_SCORING_SCHEMA, { max_sources: 5 }),
-      kbExtract(buildSummaryQuery(), visionDescription, KB_EXTRACT_SUMMARY_DETAILS_SCHEMA, { max_sources: 5 }),
+      kbExtract(buildScoringQuery(brief), visionDescription, KB_EXTRACT_SCORING_SCHEMA, { max_sources: 5 }),
+      kbExtract(buildSummaryQuery(brief), visionDescription, KB_EXTRACT_SUMMARY_DETAILS_SCHEMA, { max_sources: 5 }),
     ]);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

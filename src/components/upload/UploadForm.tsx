@@ -9,12 +9,14 @@ interface UploadFormProps {
   creatorName: string;
   category: Category | '';
   email: string;
+  brief: string;
   aszfAccepted: boolean;
   isLoggedIn: boolean;
   onLogoNameChange: (value: string) => void;
   onCreatorNameChange: (value: string) => void;
   onCategoryChange: (value: Category | '') => void;
   onEmailChange: (value: string) => void;
+  onBriefChange: (value: string) => void;
   onAszfChange: (value: boolean) => void;
 }
 
@@ -24,12 +26,14 @@ export function UploadForm({
   creatorName,
   category,
   email,
+  brief,
   aszfAccepted,
   isLoggedIn,
   onLogoNameChange,
   onCreatorNameChange,
   onCategoryChange,
   onEmailChange,
+  onBriefChange,
   onAszfChange,
 }: UploadFormProps) {
   const isFree = tier === 'free';
@@ -51,6 +55,30 @@ export function UploadForm({
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900 placeholder:text-gray-400"
         />
       </div>
+
+      {/* Brief / megjegyzés — csak fizetős csomagban */}
+      {!isFree && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Brief / megjegyzés <span className="text-gray-400">(opcionális)</span>
+          </label>
+          <textarea
+            value={brief}
+            onChange={e => {
+              if (e.target.value.length <= 1000) onBriefChange(e.target.value);
+            }}
+            placeholder={"Milyen a tervezési koncepció? Ki a célcsoport?\nHol használják (web, nyomtatás, csomagolás)?\nMilyen értékeket kell sugároznia a logónak?"}
+            rows={3}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900 placeholder:text-gray-400 resize-none"
+          />
+          <div className="flex justify-between mt-1">
+            <p className="text-xs text-gray-400">Kontextus az AI-nak a pontosabb értékeléshez.</p>
+            <p className={`text-xs ${brief.length > 900 ? 'text-orange-500' : 'text-gray-400'}`}>
+              {brief.length}/1000
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Név / cégnév */}
       <div>

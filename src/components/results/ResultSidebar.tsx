@@ -2,7 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Copy01, Check, Share07 } from "@untitledui/icons";
-import { CATEGORIES, TIER_INFO } from "@/types";
+import { CATEGORIES, TIER_INFO, CRITERIA_META, CriteriaName } from "@/types";
+
+interface CriteriaScore {
+    pont: number;
+    maxPont: number;
+    indoklas: string;
+    javaslatok?: string[];
+}
 
 interface ResultSidebarProps {
     logoUrl: string | null;
@@ -13,9 +20,12 @@ interface ResultSidebarProps {
     category?: string | null;
     tier?: string | null;
     createdAt?: string | null;
+    topPercent?: number | null;
+    szempontok?: Record<string, CriteriaScore>;
+    onCriteriaClick?: (key: string) => void;
 }
 
-export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, category, tier, createdAt }: ResultSidebarProps) {
+export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, category, tier, createdAt, topPercent, szempontok, onCriteriaClick }: ResultSidebarProps) {
     const [copied, setCopied] = useState(false);
     const [showSticky, setShowSticky] = useState(false);
     const [stickyWidth, setStickyWidth] = useState(0);
@@ -226,6 +236,17 @@ export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, c
                     }}
                 >
                     <div className="rounded-2xl border border-gray-100 bg-white/95 backdrop-blur-sm p-4 shadow-lg">
+                        {/* Módszertan caption */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                            <span className="text-[9px] font-mono text-gray-400 uppercase tracking-wider">
+                                Paul Rand · 7 kritérium
+                            </span>
+                            <span className="bg-[#FFF012] text-gray-900 text-[8px] font-bold font-mono uppercase tracking-wide px-1.5 py-px rounded border border-black/8">
+                                brandguide SCORE
+                            </span>
+                        </div>
+
+                        {/* Logo + score sor */}
                         <div className="flex items-center gap-4">
                             <div className="shrink-0 flex items-center justify-center rounded-xl border border-gray-200 bg-white w-16 h-16 p-2">
                                 <img
@@ -236,11 +257,46 @@ export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, c
                             </div>
                             <div>
                                 <div className="text-2xl font-bold text-gray-900">{score}<span className="text-sm font-normal text-gray-400">/100</span></div>
-                                <div className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                                    {rating}
+                                {/* Benchmark sor */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-medium text-gray-700">
+                                        {rating}
+                                    </span>
+                                    {topPercent !== null && topPercent !== undefined && (
+                                        <>
+                                            <span className="text-gray-300 text-xs">·</span>
+                                            <span className="text-[11px] text-gray-500">
+                                                Top <strong className="text-gray-900">{topPercent}%</strong>
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
+
+                        {/* Kritérium dot-pill-ek */}
+                        {szempontok && Object.keys(szempontok).length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                                <div className="flex flex-wrap gap-1">
+                                    {(Object.entries(szempontok) as [string, CriteriaScore][]).map(([key, value]) => {
+                                        const meta = CRITERIA_META[key as CriteriaName];
+                                        if (!meta) return null;
+                                        const pct = value.pont / meta.maxScore;
+                                        const dotColor = pct >= 0.75 ? 'bg-green-500' : pct >= 0.50 ? 'bg-amber-400' : 'bg-red-500';
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => onCriteriaClick?.(key)}
+                                                className="flex items-center gap-1 bg-gray-50 hover:bg-gray-100 rounded-full px-2 py-0.5 text-[10px] text-gray-600 font-medium transition-all cursor-pointer"
+                                            >
+                                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`} />
+                                                {meta.displayName}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

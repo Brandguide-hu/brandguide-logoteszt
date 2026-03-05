@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const category = formData.get('category') as string || null;
     const email = formData.get('email') as string || null;
     const userId = formData.get('userId') as string || null;
+    const brief = formData.get('brief') as string || null;
 
     // Validation
     if (!logoFile) {
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
         category: category || null,
         email,
         user_id: userId,
+        brief: brief || null,
       });
 
     if (insertError) {

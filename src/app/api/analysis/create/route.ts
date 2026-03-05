@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
         logo_thumbnail_path: thumbnailPath,
         logo_base64: base64,
         test_level: pending.tier === 'free' ? 'basic' : 'detailed',
+        brief: pending.brief || null,
       })
       .select('id')
       .single();

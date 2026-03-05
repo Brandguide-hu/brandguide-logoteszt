@@ -10,11 +10,12 @@ import { analyzeImageWithVision } from '@/lib/brandguide-api';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { logo, mediaType, colors, fontName } = body as {
+  const { logo, mediaType, colors, fontName, brief } = body as {
     logo: string;
     mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
     colors?: string[];
     fontName?: string;
+    brief?: string | null;
   };
 
   if (!logo) {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       await sendEvent('status', { message: 'Kép feldolgozása...', phase: 'vision' });
 
       console.log('[VISION] Starting Claude Vision analysis...');
-      const visionDescription = await analyzeImageWithVision(logo, mediaType, colors, fontName);
+      const visionDescription = await analyzeImageWithVision(logo, mediaType, colors, fontName, brief);
       console.log('[VISION] Description length:', visionDescription.length);
 
       heartbeatRunning = false;

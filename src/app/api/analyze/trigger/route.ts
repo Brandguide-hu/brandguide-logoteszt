@@ -11,11 +11,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { visionDescription, logo, analysisId, tier } = body as {
+  const { visionDescription, logo, analysisId, tier, brief } = body as {
     visionDescription: string;
     logo: string;
     analysisId?: string;
     tier?: string;
+    brief?: string | null;
   };
 
   if (!visionDescription) {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
   fetch(bgFunctionUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visionDescription, logo, analysisId, tier }),
+    body: JSON.stringify({ visionDescription, logo, analysisId, tier, brief }),
   }).catch(err => {
     console.error('[TRIGGER] Background function call failed:', err);
   });

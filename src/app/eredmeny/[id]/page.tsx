@@ -63,6 +63,7 @@ export default function ResultPage() {
     const [createdAt, setCreatedAt] = useState<string | null>(null);
     const [testLevel, setTestLevel] = useState<string | null>(null);
     const [visualAnalysis, setVisualAnalysis] = useState<VisualAnalysis | null>(null);
+    const [topPercent, setTopPercent] = useState<number | null>(null);
 
     // Check auth state for breadcrumb
     useEffect(() => {
@@ -130,6 +131,7 @@ export default function ResultPage() {
                 setTier(data.tier || null);
                 setCreatedAt(data.created_at || null);
                 setTestLevel(data.test_level || null);
+                setTopPercent(data.top_percent ?? null);
                 if (data.visual_analysis) {
                     setVisualAnalysis(data.visual_analysis as VisualAnalysis);
                 }
@@ -167,6 +169,7 @@ export default function ResultPage() {
                     setLogoName(data.logo_name || null);
                     setCreatorName(data.creator_name || null);
                     setCategory(data.category || null);
+                    setTopPercent(data.top_percent ?? null);
                     if (data.visual_analysis) {
                         setVisualAnalysis(data.visual_analysis as VisualAnalysis);
                     }
@@ -327,22 +330,86 @@ export default function ResultPage() {
 
                             {/* Score and rating - ~50% width */}
                             <div className="flex-1 flex flex-col justify-center py-4">
+                                {/* Módszertan caption */}
+                                <div className="flex items-center gap-2 flex-wrap mb-4">
+                                    <span className="text-[11px] font-mono text-gray-400 uppercase tracking-wider">
+                                        Paul Rand módszertan · 7 kritérium alapján
+                                    </span>
+                                    <span className="bg-[#FFF012] text-gray-900 text-[10px] font-bold font-mono uppercase tracking-wide px-2 py-0.5 rounded border border-black/8">
+                                        brandguide SCORE
+                                    </span>
+                                </div>
+
+                                {/* Pontszám */}
                                 <div className="flex items-baseline gap-1">
                                     <span
                                         className="font-bold text-[#37352f]"
-                                        style={{ fontSize: '96px', lineHeight: '96px' }}
+                                        style={{ fontSize: '80px', lineHeight: '80px', letterSpacing: '-2px' }}
                                     >
                                         {displayScore}
                                     </span>
                                     <span
-                                        className="font-normal text-[#9ca3af]"
-                                        style={{ fontSize: '30px' }}
+                                        className="font-normal text-[#ccc]"
+                                        style={{ fontSize: '28px' }}
                                     >
                                         /100
                                     </span>
                                 </div>
-                                <div className={`mt-4 inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${ratingStyle.bg} ${ratingStyle.color}`}>
-                                    {result.minosites}
+
+                                {/* Benchmark sor */}
+                                <div className="mt-4 flex items-center gap-3 flex-wrap">
+                                    <span className={`font-semibold text-sm ${ratingStyle.color}`}>
+                                        {result.minosites}
+                                    </span>
+                                    {topPercent !== null && (
+                                        <>
+                                            <span className="text-gray-300">·</span>
+                                            <span className="text-sm text-gray-500">
+                                                Top <strong className="text-gray-900">{topPercent}%</strong> az elemzett logók között
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Mini kritérium összefoglaló */}
+                                <div className="mt-6 pt-5 border-t border-gray-100">
+                                    <div className="text-[10px] uppercase tracking-widest text-gray-300 font-mono mb-3">
+                                        Kritériumok
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {(Object.entries(result.szempontok) as [CriteriaName, (typeof result.szempontok)[CriteriaName]][]).map(([key, value]) => {
+                                            const meta = CRITERIA_META[key];
+                                            if (!meta) return null;
+                                            const pct = value.pont / meta.maxScore;
+                                            const dotColor = pct >= 0.75 ? 'bg-green-500' : pct >= 0.50 ? 'bg-amber-400' : 'bg-red-500';
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => {
+                                                        setActiveTab(key);
+                                                        document.getElementById('criteria-section')?.scrollIntoView({ behavior: 'smooth' });
+                                                    }}
+                                                    className="flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 rounded-full px-2.5 py-1 text-[11px] text-gray-600 font-medium transition-all cursor-pointer"
+                                                >
+                                                    <span className={`w-[7px] h-[7px] rounded-full ${dotColor} shrink-0`} />
+                                                    {meta.displayName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {/* Jelmagyarázat */}
+                                    <div className="flex gap-4 mt-3">
+                                        {[
+                                            { color: 'bg-green-500', label: 'Erős (≥75%)' },
+                                            { color: 'bg-amber-400', label: 'Közepes (50–74%)' },
+                                            { color: 'bg-red-500', label: 'Fejlesztendő (<50%)' },
+                                        ].map(item => (
+                                            <div key={item.label} className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                                                <span className={`w-1.5 h-1.5 rounded-full ${item.color}`} />
+                                                {item.label}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -462,7 +529,7 @@ export default function ResultPage() {
 
                         {/* Criteria Details - Tabbed layout */}
                         <div className="mb-6">
-                            <h2 className="mb-4 text-xl font-light text-gray-900">
+                            <h2 id="criteria-section" className="mb-4 text-xl font-light text-gray-900 scroll-mt-20">
                                 Részletes értékelés
                             </h2>
 
@@ -851,6 +918,12 @@ export default function ResultPage() {
                             category={category}
                             tier={tier}
                             createdAt={createdAt}
+                            topPercent={topPercent}
+                            szempontok={result.szempontok}
+                            onCriteriaClick={(key) => {
+                                setActiveTab(key as CriteriaName);
+                                document.getElementById('criteria-section')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
                         />
                     </div>
                 </div>

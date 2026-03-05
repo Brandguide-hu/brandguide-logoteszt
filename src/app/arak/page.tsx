@@ -25,6 +25,7 @@ const DETAILED_FEATURES: Record<Tier, { included: string[]; excluded: string[] }
       'Szín, tipográfia, vizuális nyelv elemzés',
       'Erősségek / Fejlesztendő',
       'Megosztható privát link',
+      'Brief / megjegyzés',
       'PDF export',
       'Szakértői konzultáció',
     ],
@@ -42,6 +43,7 @@ const DETAILED_FEATURES: Record<Tier, { included: string[]; excluded: string[] }
       'Erősségek / Fejlesztendő lista',
       'Megosztható link',
       'Privát (opcionálisan publikálható)',
+      'Brief / megjegyzés – kontextus az AI-nak',
     ],
     excluded: [
       'PDF export',

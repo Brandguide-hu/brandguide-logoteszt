@@ -69,6 +69,7 @@ export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto
       'Szöveges indoklás + javaslatok',
       'Szín, tipográfia, vizuális nyelv elemzés',
       'Erősségek / Fejlesztendő',
+      'Brief / megjegyzés az AI-nak',
       'Megosztható link',
       'Privát (opcionálisan publikálható)',
     ],
