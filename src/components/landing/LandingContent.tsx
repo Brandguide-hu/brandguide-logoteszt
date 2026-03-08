@@ -136,23 +136,23 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                             {
                                 quote: "Ez a tool messze a legjobb, amit valaha hasonló célra használtam. Gratulálok!",
                                 name: "Kenyó Ildikó",
-                                company: "Pix@Type",
+                                company: "Pix&Type",
                                 initials: "KI",
                             },
                             {
                                 quote: "Szkeptikus voltam, hogy egy AI-nak lesz-e mondanivalója a logómról – de az elemzés konkrét, szakmai érveket hozott, nem általánosságokat. Meglepett.",
-                                name: "Csenák Bence",
+                                name: "Bokor Péter",
                                 company: "vállalkozó",
-                                initials: "CB",
+                                initials: "BP",
                             },
                         ].map((testimonial) => (
                             <div
                                 key={testimonial.name}
-                                className="rounded-xl border border-gray-200 bg-white p-6"
+                                className="relative rounded-xl border border-gray-200 bg-white p-6 overflow-hidden"
                             >
-                                {/* Decorative quote */}
-                                <span className="block text-3xl font-bold leading-none text-[#fff012] mb-3">&ldquo;</span>
-                                <p className="text-gray-700 text-[0.95rem] leading-relaxed mb-6">
+                                {/* Giant decorative quote — behind text */}
+                                <span className="absolute -top-4 -left-2 text-[10rem] font-bold leading-none text-[#fff012]/15 select-none pointer-events-none">&ldquo;</span>
+                                <p className="relative text-gray-700 text-[0.95rem] leading-relaxed mb-6 pt-4">
                                     {testimonial.quote}
                                 </p>
                                 <div className="flex items-center gap-3">
