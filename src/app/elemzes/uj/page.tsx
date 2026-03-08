@@ -484,8 +484,6 @@ function NewAnalysisContent() {
               <CategorySelect
                 selected={mockupCategory}
                 onChange={setMockupCategory}
-                logoFile={logoFile}
-                logoPreviewUrl={upgradePreviewUrl}
               />
             </div>
           )}

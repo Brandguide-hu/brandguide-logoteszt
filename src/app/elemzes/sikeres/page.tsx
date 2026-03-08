@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/providers/auth-provider';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 function SikeresContent() {
   const searchParams = useSearchParams();
@@ -13,10 +14,11 @@ function SikeresContent() {
 
   const [email, setEmail] = useState<string | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [magicLinkToken, setMagicLinkToken] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Stripe session-ből adatok kinyerése
+  // Stripe session-ből adatok kinyerése + magic link token
   useEffect(() => {
     if (sessionId) {
       fetch(`/api/checkout/session-info?session_id=${sessionId}`)
@@ -24,6 +26,7 @@ function SikeresContent() {
         .then(data => {
           if (data.email) setEmail(data.email);
           if (data.pendingAnalysisId) setAnalysisId(data.pendingAnalysisId);
+          if (data.magicLinkToken) setMagicLinkToken(data.magicLinkToken);
         })
         .catch(() => {});
     }
@@ -36,27 +39,33 @@ function SikeresContent() {
     router.push(`/elemzes/feldolgozas/${analysisId}`);
   }, [authLoading, user, analysisId, isRedirecting, router]);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCooldown(prev => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
+  // Auto-login + redirect az elemzéshez
+  const handleStartAnalysis = useCallback(async () => {
+    if (!analysisId || isLoggingIn) return;
+    setIsLoggingIn(true);
 
-  const handleResend = async () => {
-    if (resendCooldown > 0 || !email) return;
-    setResendCooldown(60);
-    try {
-      await fetch('/api/auth/resend-magic-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-    } catch {
-      // Non-critical
+    // Próbáljuk meg a magic link tokennel bejelentkeztetni
+    if (magicLinkToken) {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: magicLinkToken,
+          type: 'magiclink',
+        });
+        if (!error) {
+          console.log('[SIKERES] Auto-login successful');
+          router.push(`/elemzes/feldolgozas/${analysisId}`);
+          return;
+        }
+        console.warn('[SIKERES] Auto-login failed:', error.message);
+      } catch (err) {
+        console.warn('[SIKERES] Auto-login error:', err);
+      }
     }
-  };
+
+    // Fallback: navigálás auth nélkül (az elemzés UUID-vel azonosított)
+    router.push(`/elemzes/feldolgozas/${analysisId}`);
+  }, [analysisId, magicLinkToken, isLoggingIn, router]);
 
   // Loading state
   if (authLoading) {
@@ -108,7 +117,7 @@ function SikeresContent() {
     );
   }
 
-  // Nem bejelentkezett user → magic link várakozó + közvetlen indítás gomb
+  // Nem bejelentkezett user → közvetlen indítás gomb (auto-login)
   return (
     <AppLayout>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -132,37 +141,14 @@ function SikeresContent() {
               Nyisd meg az elemzésedet, és indulhat az értékelés.
             </p>
 
-            {/* CTA: ha már be tud lépni most → indítsa el direktbe */}
+            {/* CTA: auto-login + redirect */}
             {analysisId && (
-              <a
-                href={`/elemzes/feldolgozas/${analysisId}`}
-                className="block w-full mb-6 py-3.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors"
-              >
-                Elemzés indítása most →
-              </a>
-            )}
-
-            {/* Email info - secondary */}
-            {email && (
-              <p className="text-xs text-gray-400 mb-3">
-                Linket is küldtünk a <strong className="text-gray-500">{email}</strong> címre.
-              </p>
-            )}
-
-            {/* Resend button */}
-            {email && (
               <button
-                onClick={handleResend}
-                disabled={resendCooldown > 0}
-                className={`text-xs font-medium transition-colors ${
-                  resendCooldown > 0
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-400 hover:text-gray-600 cursor-pointer'
-                }`}
+                onClick={handleStartAnalysis}
+                disabled={isLoggingIn}
+                className="block w-full mb-6 py-3.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
               >
-                {resendCooldown > 0
-                  ? `Link újraküldése (${resendCooldown}mp)`
-                  : 'Link újraküldése'}
+                {isLoggingIn ? 'Bejelentkezés...' : 'Elemzés indítása most →'}
               </button>
             )}
           </div>

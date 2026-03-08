@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
           fields: { name: name.trim() },
           groups: process.env.MAILERLITE_GROUP_ID ? [process.env.MAILERLITE_GROUP_ID] : [],
         }),
-      }).catch(() => {});
+      }).catch(err => console.warn('[REGISTER] MailerLite subscribe error:', err));
     }
 
     // Generate magic link for email verification

@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           email: email.toLowerCase(),
           groups: process.env.MAILERLITE_GROUP_ID ? [process.env.MAILERLITE_GROUP_ID] : [],
         }),
-      }).catch(() => {});
+      }).catch(err => console.warn('[LAZY-REGISTER] MailerLite subscribe error:', err));
     }
 
     // Generate magic link

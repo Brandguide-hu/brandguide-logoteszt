@@ -111,7 +111,7 @@ export function MobileCriteriaCarousel({ szempontok, isLight, analysisId }: Mobi
                         <div
                             key={key}
                             ref={(el) => setCardRef(el, i)}
-                            className="snap-start min-w-[85vw] flex-shrink-0 rounded-xl border border-[#E5E7EB] bg-white shadow-md overflow-hidden"
+                            className="snap-start min-w-[75vw] flex-shrink-0 rounded-xl border border-[#E5E7EB] bg-white shadow-md overflow-hidden"
                         >
                             {/* 4px color strip */}
                             <div style={{ height: 4, background: accentColor }} />

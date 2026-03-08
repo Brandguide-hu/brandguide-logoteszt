@@ -81,6 +81,21 @@ export async function POST(req: NextRequest) {
         }, { onConflict: 'id' });
       }
 
+      // 1b. Subscribe to MailerLite (fire-and-forget, both new and existing users)
+      if (process.env.MAILERLITE_API_KEY) {
+        fetch('https://connect.mailerlite.com/api/subscribers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.MAILERLITE_API_KEY}`,
+          },
+          body: JSON.stringify({
+            email: customerEmail.toLowerCase(),
+            groups: process.env.MAILERLITE_GROUP_ID ? [process.env.MAILERLITE_GROUP_ID] : [],
+          }),
+        }).catch(err => console.warn('[WEBHOOK] MailerLite subscribe error:', err));
+      }
+
       // 2. Pending analysis adatok lekérése
       const { data: pending, error: pendingError } = await (admin
         .from('pending_analyses') as any)

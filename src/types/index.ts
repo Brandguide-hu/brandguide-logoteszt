@@ -71,7 +71,7 @@ export const MOCKUP_CATEGORIES: { id: MockupCategory; label: string }[] = [
   { id: 'retail_shop',       label: 'Kereskedelem / Bolt' },
   { id: 'hospitality',       label: 'Vendéglátás / Hotel' },
   { id: 'education',         label: 'Oktatás / Coaching' },
-  { id: 'universal',         label: 'Általános' },
+  { id: 'universal',         label: 'Általános / Egyéb' },
 ];
 
 export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto: number; features: string[] }> = {
