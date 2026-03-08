@@ -274,6 +274,12 @@ function FeldolgozasContent() {
                   clearTimeout(watchdogTimeout);
                   completed = true;
                   setStreamingPhase('complete');
+                  // Email notification fallback (fire-and-forget)
+                  fetch('/api/email/send-completion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ analysisId }),
+                  }).catch(err => addDebugLog(`Email notify hiba: ${err.message}`));
                   setTimeout(() => { router.push(`/eredmeny/${analysisId}`); }, 800);
                   return;
                 case 'error':
@@ -503,6 +509,14 @@ function FeldolgozasContent() {
       });
     }
 
+    // Email notification fallback (fire-and-forget)
+    addDebugLog('Email értesítés küldése...');
+    fetch('/api/email/send-completion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysisId }),
+    }).catch(err => addDebugLog(`Email notify hiba: ${err.message}`));
+
     // Redirect to results
     addDebugLog('Elemzés kész! Redirect...');
     setStreamingPhase('complete');
@@ -555,6 +569,12 @@ function FeldolgozasContent() {
             if (pollData.status === 'completed') {
               clearInterval(pollInterval);
               setStreamingPhase('complete');
+              // Email notification fallback (fire-and-forget)
+              fetch('/api/email/send-completion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ analysisId }),
+              }).catch(() => {});
               setTimeout(() => {
                 router.push(`/eredmeny/${analysisId}`);
               }, 500);
@@ -615,6 +635,12 @@ function FeldolgozasContent() {
           if (pollData.status === 'completed') {
             clearInterval(pollInterval);
             setStreamingPhase('complete');
+            // Email notification fallback (fire-and-forget)
+            fetch('/api/email/send-completion', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ analysisId }),
+            }).catch(() => {});
             setTimeout(() => {
               router.push(`/eredmeny/${analysisId}`);
             }, 500);

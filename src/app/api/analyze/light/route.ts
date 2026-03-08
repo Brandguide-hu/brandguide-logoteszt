@@ -300,8 +300,33 @@ export async function POST(request: NextRequest) {
 
       console.log('[LIGHT] Analysis saved:', analysisId);
 
+      // Email notification (fire-and-forget, de stream-ben maradunk)
+      const emailNotifyPromise = (async () => {
+        try {
+          const secret = process.env.EDGE_FUNCTION_SECRET;
+          if (!secret) {
+            console.warn('[LIGHT] EDGE_FUNCTION_SECRET not set, skipping email notification');
+            return;
+          }
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
+          const res = await fetch(`${appUrl}/api/email/analysis-notify`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${secret}`,
+            },
+            body: JSON.stringify({ analysisId, status: 'completed' }),
+          });
+          console.log('[LIGHT] Email notification response:', res.status);
+        } catch (err) {
+          console.error('[LIGHT] Email notification error:', err);
+        }
+      })();
+
       await stopHeartbeat();
       await sendEvent('complete', { id: analysisId, result });
+      // Megvárjuk az email küldést mielőtt lezárnánk a stream-et (serverless életben marad)
+      await emailNotifyPromise;
       await writer.close();
 
     } catch (error) {
