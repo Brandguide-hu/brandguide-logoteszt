@@ -18,6 +18,9 @@ const MAINTENANCE_PUBLIC_PATHS = [
   '/api/result/',
   '/api/gallery',
   '/api/featured-analyses',
+  '/api/email/',       // Email értesítések (szerver-szerver callback-ek)
+  '/api/analyze/',     // Elemzés API-k (SSE, vision, stb.)
+  '/api/analysis/',    // Elemzés létrehozás/indítás
   '/_next',
   '/favicon',
   '/logo',
