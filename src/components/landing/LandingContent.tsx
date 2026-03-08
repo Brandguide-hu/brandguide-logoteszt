@@ -113,6 +113,63 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
             {/* Featured Analyses (SSR + Suspense) */}
             {featuredSection}
 
+            {/* Testimonials */}
+            <section className="px-4 py-24 sm:px-6 md:py-32 lg:px-8 bg-gray-50">
+                <div className="mx-auto max-w-5xl">
+                    <div className="mb-12 text-center">
+                        <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-400">
+                            Visszajelzések
+                        </span>
+                        <h2 className="text-3xl font-light text-gray-900 md:text-4xl">
+                            Amit mások mondanak
+                        </h2>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-3">
+                        {[
+                            {
+                                quote: "Elképesztően részletes, hasznos az elemzés – rengeteg gondolatot elindított, hogy miken kellene finomhangolni. Biztosan fogom használni!",
+                                name: "Pintér Laura",
+                                company: "Crealastudio",
+                                initials: "PL",
+                            },
+                            {
+                                quote: "Ez a tool messze a legjobb, amit valaha hasonló célra használtam. Gratulálok!",
+                                name: "Kenyó Ildikó",
+                                company: "Pix@Type",
+                                initials: "KI",
+                            },
+                            {
+                                quote: "Szkeptikus voltam, hogy egy AI-nak lesz-e mondanivalója a logómról – de az elemzés konkrét, szakmai érveket hozott, nem általánosságokat. Meglepett.",
+                                name: "Csenák Bence",
+                                company: "vállalkozó",
+                                initials: "CB",
+                            },
+                        ].map((testimonial) => (
+                            <div
+                                key={testimonial.name}
+                                className="rounded-xl border border-gray-200 bg-white p-6"
+                            >
+                                {/* Decorative quote */}
+                                <span className="block text-3xl font-bold leading-none text-[#fff012] mb-3">&ldquo;</span>
+                                <p className="text-gray-700 text-[0.95rem] leading-relaxed mb-6">
+                                    {testimonial.quote}
+                                </p>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fff012] text-sm font-semibold text-[#222331]">
+                                        {testimonial.initials}
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-medium text-gray-900">{testimonial.name}</div>
+                                        <div className="text-[0.8rem] text-[#70728E]">{testimonial.company}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* Divider */}
             <div className="mx-auto h-px w-24 bg-gray-200" />
 
