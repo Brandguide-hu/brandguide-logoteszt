@@ -98,6 +98,30 @@ function NewAnalysisContent() {
     }
   }, [profile, user]);
 
+  // Load logo from hero drop zone (sessionStorage)
+  useEffect(() => {
+    if (upgradeFrom || logoFile) return; // Don't override upgrade or existing file
+    const base64 = sessionStorage.getItem('logolab_hero_logo_base64');
+    const fileName = sessionStorage.getItem('logolab_hero_logo_name');
+    const fileType = sessionStorage.getItem('logolab_hero_logo_type');
+    if (!base64 || !fileName || !fileType) return;
+
+    sessionStorage.removeItem('logolab_hero_logo_base64');
+    sessionStorage.removeItem('logolab_hero_logo_name');
+    sessionStorage.removeItem('logolab_hero_logo_type');
+
+    const byteChars = atob(base64);
+    const byteNumbers = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: fileType });
+    const file = new File([blob], fileName, { type: fileType });
+    setLogoFile(file);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Check free availability
   useEffect(() => {
     checkFreeAvailability();

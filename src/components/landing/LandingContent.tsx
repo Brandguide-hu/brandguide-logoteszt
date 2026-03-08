@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ReactNode } from "react";
+import { ReactNode, useState, useCallback } from "react";
 import { ArrowRight, Upload01, BarChart01, Lightbulb05, CheckCircle, Target04, Stars01, Grid01, Eye, Clock, Globe01 } from "@untitledui/icons";
 import { TransparentVideo } from "@/components/TransparentVideo";
 import { TIER_INFO } from "@/types";
+import { validateFile, fileToBase64 } from "@/lib/utils";
 
 const steps = [
     {
@@ -49,11 +50,40 @@ const ratings = [
 
 export function LandingContent({ featuredSection }: { featuredSection: ReactNode }) {
     const router = useRouter();
+    const [isDragging, setIsDragging] = useState(false);
+    const [heroError, setHeroError] = useState<string | null>(null);
 
     const handleLogoElemzes = (tier?: string) => {
         const url = tier ? `/elemzes/uj?tier=${tier}` : '/elemzes/uj';
         router.push(url);
     };
+
+    // Hero drop zone handlers
+    const handleHeroFile = useCallback(async (file: File) => {
+        const validation = validateFile(file);
+        if (!validation.valid) {
+            setHeroError(validation.error || "Érvénytelen fájl");
+            return;
+        }
+        setHeroError(null);
+        const base64 = await fileToBase64(file);
+        sessionStorage.setItem('logolab_hero_logo_base64', base64);
+        sessionStorage.setItem('logolab_hero_logo_name', file.name);
+        sessionStorage.setItem('logolab_hero_logo_type', file.type);
+        router.push('/elemzes/uj');
+    }, [router]);
+
+    const handleHeroDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file) handleHeroFile(file);
+    }, [handleHeroFile]);
+
+    const handleHeroInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) handleHeroFile(file);
+    }, [handleHeroFile]);
 
     return (
         <div className="min-h-screen bg-white overflow-x-hidden">
@@ -99,6 +129,44 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                         >
                             Hogyan működik?
                         </a>
+                    </div>
+
+                    {/* OR divider + Hero Drop Zone */}
+                    <div className="mt-10 opacity-0 animate-[fadeIn_0.8s_ease_0.7s_forwards]">
+                        <div className="flex items-center gap-4 max-w-md mx-auto mb-5">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-sm text-gray-400 font-medium">vagy</span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+
+                        <label
+                            className={`flex items-center justify-center gap-3 max-w-md mx-auto px-6 py-5 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
+                                isDragging
+                                    ? 'border-[#fff012] bg-[#fff012]/10'
+                                    : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                            onDrop={handleHeroDrop}
+                        >
+                            <Upload01 className={`size-5 shrink-0 transition-colors ${isDragging ? 'text-[#fff012]' : 'text-gray-400'}`} />
+                            <div className="text-center">
+                                <p className="text-sm font-medium text-gray-600">
+                                    {isDragging ? 'Engedd el!' : 'Dobd be ide a logódat és indítsd az elemzést'}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WebP (max 5MB)</p>
+                            </div>
+                            <input
+                                type="file"
+                                className="sr-only"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                onChange={handleHeroInputChange}
+                            />
+                        </label>
+
+                        {heroError && (
+                            <p className="mt-2 text-center text-sm text-red-500">{heroError}</p>
+                        )}
                     </div>
                 </div>
 
