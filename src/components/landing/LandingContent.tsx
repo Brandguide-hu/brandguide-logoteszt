@@ -140,7 +140,7 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                         </div>
 
                         <label
-                            className={`flex items-center justify-center gap-3 max-w-md mx-auto px-6 py-5 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
+                            className={`flex flex-col items-center justify-center gap-3 max-w-md mx-auto px-6 py-10 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200 ${
                                 isDragging
                                     ? 'border-[#fff012] bg-[#fff012]/10'
                                     : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
@@ -149,12 +149,12 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                             onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
                             onDrop={handleHeroDrop}
                         >
-                            <Upload01 className={`size-5 shrink-0 transition-colors ${isDragging ? 'text-[#fff012]' : 'text-gray-400'}`} />
+                            <Upload01 className={`size-8 transition-colors ${isDragging ? 'text-[#fff012]' : 'text-gray-400'}`} />
                             <div className="text-center">
                                 <p className="text-sm font-medium text-gray-600">
                                     {isDragging ? 'Engedd el!' : 'Dobd be ide a logódat és indítsd az elemzést'}
                                 </p>
-                                <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WebP (max 5MB)</p>
+                                <p className="text-xs text-gray-400 mt-1">PNG, JPG, WebP (max 5MB)</p>
                             </div>
                             <input
                                 type="file"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Upload01, XClose, Image01 } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 import { validateFile } from "@/lib/utils";
@@ -14,6 +14,22 @@ export function DropZone({ onFileSelect, file }: DropZoneProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
+
+    // Generate preview when file prop changes externally (e.g. from sessionStorage)
+    useEffect(() => {
+        if (!file) {
+            setPreview(null);
+            return;
+        }
+        // Only generate if we don't already have a preview
+        if (preview) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setPreview(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [file]);
 
     const handleFile = useCallback(
         (selectedFile: File) => {
