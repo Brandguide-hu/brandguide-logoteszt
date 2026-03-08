@@ -101,11 +101,11 @@ export function paymentSuccessWithMagicLinkEmail(params: {
       <p style="margin:8px 0 0"><strong>Összeg:</strong> ${params.amount} Ft</p>
       <p style="margin:8px 0 0"><strong>Dátum:</strong> ${params.date}</p>
     </div>
-    <p>Az elemzésed már fut! Kattints az alábbi linkre a megtekintéshez:</p>
-    <p style="text-align:center;margin-top:24px;">
-      <a href="${params.magicLink}" class="btn" style="${BTN_STYLE}">Elemzés megtekintése</a>
+    <p>Az elemzésed hamarosan elkészül, értesítünk emailben.</p>
+    <p style="font-size:12px;color:#999;margin-top:16px;">Az alábbi linkkel tudsz bejelentkezni a fiókodba — a link 15 percig érvényes.</p>
+    <p style="text-align:center;margin-top:16px;">
+      <a href="${params.magicLink}" class="btn" style="${BTN_STYLE}">Bejelentkezés</a>
     </p>
-    <p style="font-size:12px;color:#999;margin-top:16px;">Ez egyben a bejelentkezési linked is — a link 15 percig érvényes.</p>
   `);
   return { subject, html };
 }
