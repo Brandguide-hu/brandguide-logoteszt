@@ -62,7 +62,18 @@ export async function POST(req: NextRequest) {
       .eq('id', analysis.user_id)
       .single();
 
-    const userEmail = profile?.email as string | undefined;
+    // Fallback: auth.users email (Stripe webhook sets it there)
+    let userEmail = profile?.email as string | undefined;
+    if (!userEmail) {
+      try {
+        const { data: { user: authUser } } = await admin.auth.admin.getUserById(analysis.user_id);
+        userEmail = authUser?.email || undefined;
+        console.log(`[EMAIL-NOTIFY] Profile email empty, auth.users email: ${userEmail || 'NINCS'}`);
+      } catch {
+        console.warn('[EMAIL-NOTIFY] Failed to fetch auth user email');
+      }
+    }
+
     const userName = (profile?.display_name || profile?.name || analysis.creator_name || 'Kedves Felhasználó') as string;
     const logoName = (analysis.logo_name || 'Névtelen logó') as string;
     const score = (analysis.result?.osszpontszam || 0) as number;
