@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     // Fetch analysis data
     const { data: analysis, error: analysisError } = await (admin
       .from('analyses') as any)
-      .select('user_id, logo_name, tier, logo_thumbnail_path, result, status, completed_at')
+      .select('user_id, logo_name, tier, logo_thumbnail_path, result, status, completed_at, creator_name')
       .eq('id', analysisId)
       .single();
 
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     const userEmail = profile?.email as string | undefined;
-    const userName = (profile?.display_name || profile?.name || 'Kedves Felhasználó') as string;
+    const userName = (profile?.display_name || profile?.name || analysis.creator_name || 'Kedves Felhasználó') as string;
     const logoName = (analysis.logo_name || 'Névtelen logó') as string;
     const score = (analysis.result?.osszpontszam || 0) as number;
     const tier = analysis.tier as string;
