@@ -128,6 +128,8 @@ export async function POST(request: NextRequest) {
         logo_name: pending.logo_name || 'Névtelen logó',
         creator_name: pending.creator_name,
         category: pending.category,
+        mockup_category: pending.mockup_category || 'universal',
+        mockup_confidence: 0.0,
         logo_original_path: permanentPath,
         logo_thumbnail_path: thumbnailPath,
         logo_base64: base64,

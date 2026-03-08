@@ -8,6 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { buildVisionPrompt } from './prompts-v2';
+import { resizeImageForVision } from './image-utils';
 
 const BRANDGUIDE_ENDPOINT = process.env.BRANDGUIDE_ENDPOINT || 'https://udqiowvplrkdrviahylk.supabase.co/functions/v1/kb-extract';
 const BRANDGUIDE_API_KEY = process.env.BRANDGUIDE_API_KEY;
@@ -41,6 +42,9 @@ export async function analyzeImageWithVision(
   if (userFontName) console.log('[VISION] User font name:', userFontName);
   if (brief) console.log('[VISION] Brief provided, length:', brief.length);
 
+  // Resize if image exceeds Vision API limits (max 4096px)
+  const resized = await resizeImageForVision(imageBase64, mediaType);
+
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 2000,
@@ -52,8 +56,8 @@ export async function analyzeImageWithVision(
             type: 'image',
             source: {
               type: 'base64',
-              media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-              data: imageBase64,
+              media_type: resized.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+              data: resized.base64,
             },
           },
           {

@@ -48,6 +48,32 @@ export const CATEGORIES: Record<Category, string> = {
   other: 'Egyéb',
 };
 
+// Mockup kategóriák (v1.0 — kategória-választó lépés)
+export type MockupCategory =
+  | 'food_beverage'
+  | 'fashion_lifestyle'
+  | 'tech_digital'
+  | 'professional'
+  | 'creative_agency'
+  | 'health_wellness'
+  | 'retail_shop'
+  | 'hospitality'
+  | 'education'
+  | 'universal';
+
+export const MOCKUP_CATEGORIES: { id: MockupCategory; label: string }[] = [
+  { id: 'food_beverage',     label: 'Étterem / Kávézó' },
+  { id: 'fashion_lifestyle', label: 'Divat / Lifestyle' },
+  { id: 'tech_digital',      label: 'Tech / Digitális' },
+  { id: 'professional',      label: 'Professzionális' },
+  { id: 'creative_agency',   label: 'Kreatív / Ügynökség' },
+  { id: 'health_wellness',   label: 'Egészség / Wellness' },
+  { id: 'retail_shop',       label: 'Kereskedelem / Bolt' },
+  { id: 'hospitality',       label: 'Vendéglátás / Hotel' },
+  { id: 'education',         label: 'Oktatás / Coaching' },
+  { id: 'universal',         label: 'Általános' },
+];
+
 export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto: number; features: string[] }> = {
   free: {
     label: 'Light',
@@ -334,6 +360,8 @@ export interface AnalysisRow {
   deleted_at: string | null;
   visual_analysis: VisualAnalysis | null;
   visual_analysis_at: string | null;
+  mockup_category: MockupCategory | null;
+  mockup_confidence: number | null;
 }
 
 // Account eredete
@@ -365,6 +393,7 @@ export interface PendingAnalysis {
   category: Category | null;
   email: string | null;                // Megadott email (ha nem volt bejelentkezve)
   user_id: string | null;              // Ha be volt jelentkezve
+  mockup_category: MockupCategory | null;
   created_at: string;
   expires_at: string;                  // 24h TTL
 }

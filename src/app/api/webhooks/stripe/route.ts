@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail } from '@/lib/email/send';
-import { paymentSuccessWithMagicLinkEmail, paymentSuccessEmail } from '@/lib/email/templates';
+import { paymentSuccessWithMagicLinkEmail, paymentSuccessEmail, adminPaymentSuccessEmail, adminPaymentFailedEmail } from '@/lib/email/templates';
 import { TIER_INFO } from '@/types';
 import Stripe from 'stripe';
 import crypto from 'crypto';
@@ -155,6 +155,8 @@ export async function POST(req: NextRequest) {
           logo_name: pending.logo_name || 'Névtelen logó',
           creator_name: pending.creator_name,
           category: pending.category,
+          mockup_category: pending.mockup_category || 'universal',
+          mockup_confidence: 0.0,
           logo_original_path: permanentPath,
           logo_thumbnail_path: thumbnailPath,
           logo_base64: base64,
@@ -178,6 +180,11 @@ export async function POST(req: NextRequest) {
       const tierInfo = TIER_INFO[tier as keyof typeof TIER_INFO];
       const formattedAmount = new Intl.NumberFormat('hu-HU').format(Math.round((session.amount_total || 0) / 100));
       const formattedDate = new Date().toLocaleDateString('hu-HU');
+      const logoName = pending.logo_name || 'Névtelen logó';
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const logoThumbnailUrl = thumbnailPath
+        ? `${supabaseUrl}/storage/v1/object/public/logos/${thumbnailPath}`
+        : undefined;
 
       if (isNewUser) {
         // Új user → magic link-es email
@@ -195,6 +202,8 @@ export async function POST(req: NextRequest) {
           amount: formattedAmount,
           date: formattedDate,
           magicLink: magicLink || `${appUrl}/auth/login`,
+          logoName,
+          logoThumbnailUrl,
         });
 
         await sendEmail({ to: customerEmail, subject, html });
@@ -205,13 +214,30 @@ export async function POST(req: NextRequest) {
           tierName: tierInfo?.label || tier,
           amount: formattedAmount,
           date: formattedDate,
-          analysisUrl: `${appUrl}/elemzes/feldolgozas/${pending_analysis_id}`,
+          logoName,
+          logoThumbnailUrl,
         });
 
         await sendEmail({ to: customerEmail, subject, html });
       }
 
-      // 8. Cleanup temp
+      // 8. Admin értesítő email — sikeres fizetés
+      try {
+        const adminEmailAddr = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+        const { subject: adminSubject, html: adminHtml } = adminPaymentSuccessEmail({
+          userEmail: customerEmail,
+          userName: pending.creator_name || 'Ismeretlen',
+          tierName: tierInfo?.label || tier,
+          amount: formattedAmount,
+          analysisId: pending_analysis_id,
+        });
+        await sendEmail({ to: adminEmailAddr, subject: adminSubject, html: adminHtml });
+      } catch (adminEmailErr) {
+        console.error('[WEBHOOK] Admin email error:', adminEmailErr);
+        // Non-critical
+      }
+
+      // 9. Cleanup temp
       await (admin.from('pending_analyses') as any).delete().eq('id', pending_analysis_id);
       await admin.storage.from('logos-temp').remove([
         pending.logo_temp_path,
@@ -222,6 +248,27 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('[WEBHOOK] Processing error:', err);
       return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
+    }
+  }
+
+  // Sikertelen fizetés — checkout session lejárt
+  if (event.type === 'checkout.session.expired') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const { tier } = session.metadata || {};
+    const customerEmail = session.customer_details?.email || session.customer_email || 'ismeretlen';
+
+    try {
+      const tierInfo = tier ? TIER_INFO[tier as keyof typeof TIER_INFO] : null;
+      const adminEmailAddr = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+      const { subject, html } = adminPaymentFailedEmail({
+        userEmail: customerEmail,
+        tierName: tierInfo?.label || tier || 'ismeretlen',
+        reason: 'A checkout session lejárt — a felhasználó nem fejezte be a fizetést.',
+      });
+      await sendEmail({ to: adminEmailAddr, subject, html });
+      console.log(`[WEBHOOK] Payment expired notification sent for: ${customerEmail}`);
+    } catch (err) {
+      console.error('[WEBHOOK] Failed payment notification error:', err);
     }
   }
 

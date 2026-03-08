@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
 import { useAuthModal } from '@/providers/auth-modal-provider';
@@ -20,8 +20,30 @@ export function Header() {
   const { openAuthModal } = useAuthModal();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
 
   const visibleItems = NAV_ITEMS.filter(item => !item.authRequired || user);
+
+  // Check maintenance mode for admin users
+  useEffect(() => {
+    if (!isAdmin || !user) return;
+    const checkMaintenance = async () => {
+      try {
+        const { getSupabaseBrowserClient } = await import('@/lib/supabase/client');
+        const supabase = getSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/admin/settings/maintenance', {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIsMaintenanceMode(data.maintenance_mode ?? false);
+        }
+      } catch { /* ignore */ }
+    };
+    checkMaintenance();
+  }, [isAdmin, user]);
 
   const handleLogoClick = () => {
     router.push('/');
@@ -43,12 +65,19 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <button
-            onClick={handleLogoClick}
-            className="hover:opacity-80 transition-opacity cursor-pointer"
-          >
-            <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-11" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogoClick}
+              className="hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-11" />
+            </button>
+            {isAdmin && isMaintenanceMode && (
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded-full uppercase tracking-wide">
+                Maintenance
+              </span>
+            )}
+          </div>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">

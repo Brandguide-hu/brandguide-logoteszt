@@ -1,20 +1,18 @@
 'use client';
 
-import { Tier, Category, CATEGORIES } from '@/types';
+import { Tier } from '@/types';
 import { cx } from '@/utils/cx';
 
 interface UploadFormProps {
   tier: Tier;
   logoName: string;
   creatorName: string;
-  category: Category | '';
   email: string;
   brief: string;
   aszfAccepted: boolean;
   isLoggedIn: boolean;
   onLogoNameChange: (value: string) => void;
   onCreatorNameChange: (value: string) => void;
-  onCategoryChange: (value: Category | '') => void;
   onEmailChange: (value: string) => void;
   onBriefChange: (value: string) => void;
   onAszfChange: (value: boolean) => void;
@@ -24,14 +22,12 @@ export function UploadForm({
   tier,
   logoName,
   creatorName,
-  category,
   email,
   brief,
   aszfAccepted,
   isLoggedIn,
   onLogoNameChange,
   onCreatorNameChange,
-  onCategoryChange,
   onEmailChange,
   onBriefChange,
   onAszfChange,
@@ -95,25 +91,6 @@ export function UploadForm({
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900 placeholder:text-gray-400"
         />
         <p className="text-xs text-gray-400 mt-1">Ez jelenik meg a galériában az elemzésed mellett.</p>
-      </div>
-
-      {/* Iparág */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Iparág {isFree && <span className="text-red-500">*</span>}
-          {!isFree && <span className="text-gray-400">(opcionális)</span>}
-        </label>
-        <select
-          value={category}
-          onChange={e => onCategoryChange(e.target.value as Category | '')}
-          required={isFree}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900 cursor-pointer"
-        >
-          <option value="">Válassz iparágat...</option>
-          {Object.entries(CATEGORIES).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
       </div>
 
       {/* Email + ÁSZF — csak ha nincs bejelentkezve */}

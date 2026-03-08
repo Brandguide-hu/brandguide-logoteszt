@@ -239,7 +239,7 @@ export function ResultSidebar({ logoUrl, score, rating, logoName, creatorName, c
                         {/* Módszertan caption */}
                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
                             <span className="text-[9px] font-mono text-gray-400 uppercase tracking-wider">
-                                Paul Rand · 7 kritérium
+                                Brandguide · Paul Rand 7 kritériuma
                             </span>
                             <span className="bg-[#FFF012] text-gray-900 text-[8px] font-bold font-mono uppercase tracking-wide px-1.5 py-px rounded border border-black/8">
                                 brandguide SCORE

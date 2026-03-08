@@ -9,6 +9,7 @@ import {
     RadarChart,
     ResultSkeleton,
     ResultSidebar,
+    MobileCriteriaCarousel,
 } from "@/components/results";
 import {
     ArrowLeft, RefreshCw05, AlertCircle, CheckCircle, AlertTriangle, Lightbulb02,
@@ -333,7 +334,7 @@ export default function ResultPage() {
                                 {/* Módszertan caption */}
                                 <div className="flex items-center gap-2 flex-wrap mb-4">
                                     <span className="text-[11px] font-mono text-gray-400 uppercase tracking-wider">
-                                        Paul Rand módszertan · 7 kritérium alapján
+                                        Brandguide módszertan · Paul Rand 7 kritériuma alapján
                                     </span>
                                     <span className="bg-[#FFF012] text-gray-900 text-[10px] font-bold font-mono uppercase tracking-wide px-2 py-0.5 rounded border border-black/8">
                                         brandguide SCORE
@@ -480,7 +481,7 @@ export default function ResultPage() {
                                         </div>
                                         {result.erossegek && result.erossegek.filter(e => typeof e === 'string' && e.length >= 10 && !e.includes('":{') && !e.includes('":[') && !e.includes('":\"')).length > 0 ? (
                                             <ul className="space-y-2">
-                                                {result.erossegek.filter(e => typeof e === 'string' && e.length >= 10 && !e.includes('":{') && !e.includes('":[') && !e.includes('":\"')).map((item, index) => (
+                                                {result.erossegek.filter(e => typeof e === 'string' && e.length >= 10 && !e.includes('":{') && !e.includes('":[') && !e.includes('":\"')).slice(0, 3).map((item, index) => (
                                                     <li key={index} className="flex items-start gap-2 text-sm text-emerald-700">
                                                         <span className="shrink-0 mt-[7px] text-[8px] leading-none text-emerald-500">●</span>
                                                         {item}
@@ -499,7 +500,7 @@ export default function ResultPage() {
                                         </div>
                                         {result.fejlesztendo && result.fejlesztendo.filter(f => typeof f === 'string' && f.length >= 10 && !f.includes('":{') && !f.includes('":[') && !f.includes('":\"')).length > 0 ? (
                                             <ul className="space-y-2">
-                                                {result.fejlesztendo.filter(f => typeof f === 'string' && f.length >= 10 && !f.includes('":{') && !f.includes('":[') && !f.includes('":\"')).map((item, index) => (
+                                                {result.fejlesztendo.filter(f => typeof f === 'string' && f.length >= 10 && !f.includes('":{') && !f.includes('":[') && !f.includes('":\"')).slice(0, 3).map((item, index) => (
                                                     <li key={index} className="flex items-start gap-2 text-sm text-amber-700">
                                                         <span className="shrink-0 mt-[7px] text-[8px] leading-none text-amber-500">●</span>
                                                         {item}
@@ -533,34 +534,16 @@ export default function ResultPage() {
                                 Részletes értékelés
                             </h2>
 
-                            {/* Mobile dropdown */}
-                            <div className="mb-4 sm:hidden relative">
-                                <select
-                                    value={activeTab}
-                                    onChange={(e) => setActiveTab(e.target.value as CriteriaName)}
-                                    className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
-                                >
-                                    {Object.entries(result.szempontok).map(([key, value]) => {
-                                        const criteriaKey = key as CriteriaName;
-                                        const meta = CRITERIA_META[criteriaKey];
-                                        if (!meta) return null;
-                                        return (
-                                            <option key={key} value={key}>
-                                                {meta.displayName} — {value.pont}/{meta.maxScore}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </div>
-                            </div>
+                            {/* Mobile carousel — swipe cards with snap scroll */}
+                            <MobileCriteriaCarousel
+                                szempontok={result.szempontok}
+                                isLight={isLight}
+                                analysisId={id}
+                            />
 
-                            <div className="flex gap-4">
-                                {/* Left side - Tab list (hidden on mobile) */}
-                                <div className="hidden sm:block w-64 shrink-0 space-y-1">
+                            <div className="hidden sm:flex gap-4">
+                                {/* Left side - Tab list */}
+                                <div className="w-64 shrink-0 space-y-1">
                                     {Object.entries(result.szempontok).map(([key, value]) => {
                                         const criteriaKey = key as CriteriaName;
                                         const meta = CRITERIA_META[criteriaKey];

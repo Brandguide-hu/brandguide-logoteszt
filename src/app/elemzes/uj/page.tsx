@@ -6,8 +6,9 @@ import { useAuth } from '@/providers/auth-provider';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { TierSelector } from '@/components/upload/TierSelector';
 import { UploadForm } from '@/components/upload/UploadForm';
+import { CategorySelect } from '@/components/upload/CategorySelect';
 import { DropZone } from '@/components/upload/DropZone';
-import { Tier, Category, TIER_INFO } from '@/types';
+import { Tier, Category, MockupCategory, TIER_INFO } from '@/types';
 import { cx } from '@/utils/cx';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -30,6 +31,7 @@ function NewAnalysisContent() {
   const [logoName, setLogoName] = useState('');
   const [creatorName, setCreatorName] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
+  const [mockupCategory, setMockupCategory] = useState<MockupCategory>('universal');
   const [email, setEmail] = useState('');
   const [brief, setBrief] = useState('');
   const [aszfAccepted, setAszfAccepted] = useState(false);
@@ -134,7 +136,6 @@ function NewAnalysisContent() {
     const isFree = selectedTier === 'free';
     if (isFree) {
       if (!creatorName.trim()) return false;
-      if (!category) return false;
     }
 
     // Auth fields required only when not logged in
@@ -144,7 +145,7 @@ function NewAnalysisContent() {
     }
 
     return true;
-  }, [selectedTier, logoFile, creatorName, category, email, aszfAccepted, user]);
+  }, [selectedTier, logoFile, creatorName, email, aszfAccepted, user]);
 
   // Submit handler
   const handleSubmit = async () => {
@@ -176,6 +177,7 @@ function NewAnalysisContent() {
       formData.append('logoName', logoName || 'Névtelen logó');
       if (creatorName) formData.append('creatorName', creatorName);
       if (category) formData.append('category', category);
+      formData.append('mockupCategory', mockupCategory);
       if (email) formData.append('email', email);
       if (user?.id) formData.append('userId', user.id);
       if (brief.trim()) formData.append('brief', brief.trim());
@@ -439,17 +441,27 @@ function NewAnalysisContent() {
                 tier={selectedTier}
                 logoName={logoName}
                 creatorName={creatorName}
-                category={category}
                 email={email}
                 brief={brief}
                 aszfAccepted={aszfAccepted}
                 isLoggedIn={!!user}
                 onLogoNameChange={setLogoName}
                 onCreatorNameChange={setCreatorName}
-                onCategoryChange={setCategory}
                 onEmailChange={setEmail}
                 onBriefChange={setBrief}
                 onAszfChange={setAszfAccepted}
+              />
+            </div>
+          )}
+
+          {/* Step 4: Category Selection */}
+          {selectedTier && logoFile && (
+            <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 mb-6">
+              <CategorySelect
+                selected={mockupCategory}
+                onChange={setMockupCategory}
+                logoFile={logoFile}
+                logoPreviewUrl={upgradePreviewUrl}
               />
             </div>
           )}
@@ -496,8 +508,6 @@ function NewAnalysisContent() {
                   ? 'Fogadd el az ÁSZF-et'
                   : selectedTier === 'free' && !creatorName.trim()
                   ? 'Add meg a neved vagy a céged nevét'
-                  : selectedTier === 'free' && !category
-                  ? 'Válassz iparágat'
                   : ''}
               </p>
             )}

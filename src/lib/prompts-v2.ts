@@ -31,6 +31,8 @@ export const VISION_PROMPT_BASE = `# Szereped: Vakvezető Designer
 
 Képzeld el, hogy egy vak branding szakértőnek mutatod be ezt a logót. Ő nem látja a képet, de TELJESEN el kell tudnia képzelni – minden részletével, arányával, hangulatával együtt. A te szavaid az ő szemei.
 
+**KRITIKUS: Légy RENDKÍVÜL aprólékos és részletes!** Minden apró elemet, textúrát, árnyékot, vonalvastagságot, betűközt, szín-átmenetet, dekoratív részletet írj le. Ha egy elem kis méretben (16px, 32px) nem lenne felismerhető, JELEZD EXPLICIT MÓDON. A logó-elemzés minősége a te leírásod pontosságán múlik.
+
 Sétáltasd végig a logón úgy, mintha egy galériában vezetnéd körbe. Ne csak felsorold az elemeket – MUTASD MEG őket, írd le a kapcsolataikat, érzékeltesd az összbenyomást.
 
 ---
@@ -136,6 +138,7 @@ Ez kritikus! A branding szakértőnek TUDNIA KELL a hibákról, hogy kritizálha
 
 Minden hibát, ami nem szándékos design döntésnek tűnik, részletesen írj le:
 
+- **Kis méretben elvesző részletek:** Mely elemek nem lennének láthatók 16px vagy 32px méretben? (apró szövegek, vékony vonalak, dekoratív elemek, textúrák) — EZ KRITIKUS, írd le részletesen!
 - **Pixelesedés:** Hol, milyen mértékben? (élek, görbék, kis méret)
 - **Elmosódottság:** Mely részen? Éles kéne legyen?
 - **Átfedési problémák:** Elemek "egymásba lógnak" ahol nem kéne
@@ -731,13 +734,25 @@ Egy logó NEM illusztráció. A logó egyszerű, skálázható, időtálló azon
 
 ### AUTOMATIKUS "ILLUSZTRÁCIÓ-GYANÚ" INDIKÁTOROK:
 
-Ha ezek közül **3 vagy több** jelen van → **MAX 55-60 pont összesen**:
+⚠️ **SZIGORÚ SZABÁLY** – Ha ezek közül **2 vagy több** jelen van → **MAX 45-50 pont összesen**:
 - 4+ szín használata gradienssel
 - Apró, 10mm alatt olvashatatlan részletek
 - Körbe írt szöveg + központi kép + peremdekoráció együtt
 - Fotorealisztikus vagy árnyékolt elemek
 - Badge/embléma stílus túl sok réteggel (5+ vizuális elem)
+- Rajzos, illusztrációs karakterek vagy jelenetek
+- Vékony vonalak, textúrák, árnyékok amelyek kis méretben eltűnnek
 - "Nem tudnám 30 másodperc alatt fejből lerajzolni"
+
+### KIS MÉRETBEN NEM MŰKÖDIK = SZIGORÚ BÜNTETÉS:
+
+**Ez az egyik legfontosabb teszt.** Egy logónak 16px-en (favicon), 32px-en (app ikon) és 10mm-en (névjegykártya) is felismerhetőnek KELL lennie.
+
+Ha a leírás alapján a logó kis méretben elveszíti a részleteit:
+- Apró szövegek olvashatatlanná válnak → MAX 50 pont
+- Vékony vonalak, dekoratív elemek eltűnnek → MAX 50 pont
+- A logó lényegi eleme (karakter, jelenet) felismerhetetlen lesz → MAX 40 pont
+- Több probléma együtt → MAX 35 pont
 
 ### A "BADGE-CSAPDA":
 
@@ -745,11 +760,11 @@ Sok logó badge formátumú (kör/pajzs + szöveg körben + központi kép).
 Ez ÖNMAGÁBAN rendben van (gondolj a Starbucksra).
 
 DE ha a badge-en belül:
-- 3+ különböző vizuális elem van
-- Apró dekoratív részletek vannak a peremen
-- A központi kép önmagában is összetett illusztráció
+- 3+ különböző vizuális elem van → MAX 55 pont
+- Apró dekoratív részletek vannak a peremen → MAX 50 pont
+- A központi kép önmagában is összetett illusztráció → MAX 45 pont
 
-→ Ez már NEM működőképes logó. Jelezd ezt explicit módon!
+→ Ez már NEM működőképes logó. Jelezd ezt explicit módon és BÜNTESS keményen!
 
 ---
 
@@ -767,12 +782,14 @@ DE ha a badge-en belül:
 
 ### AUTOMATIKUS PONTSZÁM-PLAFON:
 
-- Ha a logó **illusztráció-komplexitású** → MAX 50 pont
-- Ha **badge 5+ elemmel** → MAX 55 pont
-- Ha **gradiens + apró részletek együtt** → MAX 45 pont
+- Ha a logó **illusztráció-komplexitású** (rajzos elemek, karakterek, jelenetek) → **MAX 45 pont**
+- Ha **badge 5+ elemmel** → MAX 50 pont
+- Ha **gradiens + apró részletek együtt** → MAX 40 pont
+- Ha **kis méretben (16-32px) részletek elvesznek** → MAX 45 pont
 - Ha **pixeles, elmosódott vagy rossz minőségű** → MAX 35 pont
 
 **KRITIKUS:** Légy kritikus és objektív! A magas pontszámot KI KELL ÉRDEMELNI.
+Az illusztrációs, rajzos logók NEM kaphatnak magas pontszámot, mert nem működnek valós felhasználásban!
 
 ---
 
@@ -927,13 +944,25 @@ Egy logó NEM illusztráció. A logó egyszerű, skálázható, időtálló azon
 
 ### AUTOMATIKUS "ILLUSZTRÁCIÓ-GYANÚ" INDIKÁTOROK:
 
-Ha ezek közül **3 vagy több** jelen van → **MAX 55-60 pont összesen**:
+⚠️ **SZIGORÚ SZABÁLY** – Ha ezek közül **2 vagy több** jelen van → **MAX 45-50 pont összesen**:
 - 4+ szín használata gradienssel
 - Apró, 10mm alatt olvashatatlan részletek
 - Körbe írt szöveg + központi kép + peremdekoráció együtt
 - Fotorealisztikus vagy árnyékolt elemek
 - Badge/embléma stílus túl sok réteggel (5+ vizuális elem)
+- Rajzos, illusztrációs karakterek vagy jelenetek
+- Vékony vonalak, textúrák, árnyékok amelyek kis méretben eltűnnek
 - "Nem tudnám 30 másodperc alatt fejből lerajzolni"
+
+### KIS MÉRETBEN NEM MŰKÖDIK = SZIGORÚ BÜNTETÉS:
+
+**Ez az egyik legfontosabb teszt.** Egy logónak 16px-en (favicon), 32px-en (app ikon) és 10mm-en (névjegykártya) is felismerhetőnek KELL lennie.
+
+Ha a leírás alapján a logó kis méretben elveszíti a részleteit:
+- Apró szövegek olvashatatlanná válnak → MAX 50 pont
+- Vékony vonalak, dekoratív elemek eltűnnek → MAX 50 pont
+- A logó lényegi eleme (karakter, jelenet) felismerhetetlen lesz → MAX 40 pont
+- Több probléma együtt → MAX 35 pont
 
 ### A "BADGE-CSAPDA":
 
@@ -941,11 +970,11 @@ Sok logó badge formátumú (kör/pajzs + szöveg körben + központi kép).
 Ez ÖNMAGÁBAN rendben van (gondolj a Starbucksra).
 
 DE ha a badge-en belül:
-- 3+ különböző vizuális elem van
-- Apró dekoratív részletek vannak a peremen
-- A központi kép önmagában is összetett illusztráció
+- 3+ különböző vizuális elem van → MAX 55 pont
+- Apró dekoratív részletek vannak a peremen → MAX 50 pont
+- A központi kép önmagában is összetett illusztráció → MAX 45 pont
 
-→ Ez már NEM működőképes logó. Jelezd ezt explicit módon!
+→ Ez már NEM működőképes logó. Jelezd ezt explicit módon és BÜNTESS keményen!
 
 ---
 
@@ -963,12 +992,14 @@ DE ha a badge-en belül:
 
 ### AUTOMATIKUS PONTSZÁM-PLAFON:
 
-- Ha a logó **illusztráció-komplexitású** → MAX 50 pont
-- Ha **badge 5+ elemmel** → MAX 55 pont
-- Ha **gradiens + apró részletek együtt** → MAX 45 pont
+- Ha a logó **illusztráció-komplexitású** (rajzos elemek, karakterek, jelenetek) → **MAX 45 pont**
+- Ha **badge 5+ elemmel** → MAX 50 pont
+- Ha **gradiens + apró részletek együtt** → MAX 40 pont
+- Ha **kis méretben (16-32px) részletek elvesznek** → MAX 45 pont
 - Ha **pixeles, elmosódott vagy rossz minőségű** → MAX 35 pont
 
 **KRITIKUS:** Légy kritikus és objektív! A magas pontszámot KI KELL ÉRDEMELNI.
+Az illusztrációs, rajzos logók NEM kaphatnak magas pontszámot, mert nem működnek valós felhasználásban!
 
 ---
 

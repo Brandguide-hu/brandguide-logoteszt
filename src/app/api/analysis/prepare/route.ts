@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     const logoName = formData.get('logoName') as string || 'Névtelen logó';
     const creatorName = formData.get('creatorName') as string || null;
     const category = formData.get('category') as string || null;
+    const mockupCategory = formData.get('mockupCategory') as string || 'universal';
     const email = formData.get('email') as string || null;
     const userId = formData.get('userId') as string || null;
     const brief = formData.get('brief') as string || null;
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
         logo_name: logoName,
         creator_name: creatorName,
         category: category || null,
+        mockup_category: mockupCategory,
         email,
         user_id: userId,
         brief: brief || null,

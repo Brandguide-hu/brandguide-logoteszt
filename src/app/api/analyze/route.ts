@@ -447,6 +447,26 @@ export async function POST(request: NextRequest) {
       await sendEvent('complete', { id: savedId, result });
       await writer.close();
 
+      // Email notification (non-blocking, after SSE close)
+      if (analysisId) {
+        try {
+          const edgeFunctionSecret = process.env.EDGE_FUNCTION_SECRET;
+          if (edgeFunctionSecret) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
+            fetch(`${appUrl}/api/email/analysis-notify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${edgeFunctionSecret}`,
+              },
+              body: JSON.stringify({ analysisId: savedId, status: 'completed' }),
+            }).catch(e => console.error('[EMAIL] Notify callback error:', e));
+          }
+        } catch (e) {
+          console.error('[EMAIL] Notification setup error:', e);
+        }
+      }
+
     } catch (error) {
       await stopHeartbeat();
       console.error('[ANALYZE V4] Error:', error);
@@ -454,6 +474,30 @@ export async function POST(request: NextRequest) {
         message: error instanceof Error ? error.message : 'Ismeretlen hiba'
       });
       await writer.close();
+
+      // Send failure notification for known analysis
+      if (analysisId) {
+        try {
+          const edgeFunctionSecret = process.env.EDGE_FUNCTION_SECRET;
+          if (edgeFunctionSecret) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
+            fetch(`${appUrl}/api/email/analysis-notify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${edgeFunctionSecret}`,
+              },
+              body: JSON.stringify({
+                analysisId,
+                status: 'failed',
+                errorMessage: error instanceof Error ? error.message : 'Ismeretlen hiba',
+              }),
+            }).catch(e => console.error('[EMAIL] Failure notify error:', e));
+          }
+        } catch (e) {
+          console.error('[EMAIL] Failure notification error:', e);
+        }
+      }
     }
   })();
 

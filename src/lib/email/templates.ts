@@ -32,7 +32,7 @@ function layout(content: string): string {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo"><img src="${APP_URL}/logolab-logo-new.png" alt="LogoLab" /></div>
+      <div class="logo"><img src="${APP_URL}/logolab-logo-new.png" alt="LogoLab" width="140" height="36" style="height:36px;width:auto;" /></div>
       ${content}
     </div>
     <div class="footer">
@@ -50,21 +50,27 @@ export function paymentSuccessEmail(params: {
   tierName: string;
   amount: string;
   date: string;
-  analysisUrl: string;
+  logoName?: string;
+  logoThumbnailUrl?: string;
 }) {
   const subject = 'Fizetésed sikeres – LogoLab';
+  const logoPreview = params.logoThumbnailUrl
+    ? `<div style="text-align:center;margin-bottom:12px;">
+        <img src="${params.logoThumbnailUrl}" alt="${params.logoName || ''}" width="80" height="80"
+             style="width:80px;height:80px;object-fit:contain;border-radius:8px;background:#f9f9f9;" />
+      </div>`
+    : '';
   const html = layout(`
     <p>Szia ${params.name}!</p>
     <p>Köszönjük a vásárlást! A fizetésed sikeresen megtörtént.</p>
     <div class="highlight">
-      <p style="margin:0"><strong>Csomag:</strong> ${params.tierName}</p>
+      ${logoPreview}
+      ${params.logoName ? `<p style="margin:0"><strong>Logó:</strong> ${params.logoName}</p>` : ''}
+      <p style="margin:${params.logoName ? '8px 0 0' : '0'}"><strong>Csomag:</strong> ${params.tierName}</p>
       <p style="margin:8px 0 0"><strong>Összeg:</strong> ${params.amount} Ft</p>
       <p style="margin:8px 0 0"><strong>Dátum:</strong> ${params.date}</p>
     </div>
     <p>Az elemzésed hamarosan elkészül, értesítünk emailben.</p>
-    <p style="text-align:center;margin-top:24px;">
-      <a href="${params.analysisUrl}" class="btn" style="${BTN_STYLE}">Elemzés megtekintése</a>
-    </p>
   `);
   return { subject, html };
 }
@@ -75,13 +81,23 @@ export function paymentSuccessWithMagicLinkEmail(params: {
   amount: string;
   date: string;
   magicLink: string;
+  logoName?: string;
+  logoThumbnailUrl?: string;
 }) {
   const subject = 'Fizetésed sikeres — LogoLab';
+  const logoPreview = params.logoThumbnailUrl
+    ? `<div style="text-align:center;margin-bottom:12px;">
+        <img src="${params.logoThumbnailUrl}" alt="${params.logoName || ''}" width="80" height="80"
+             style="width:80px;height:80px;object-fit:contain;border-radius:8px;background:#f9f9f9;" />
+      </div>`
+    : '';
   const html = layout(`
     <p>Szia!</p>
     <p>Köszönjük a vásárlást! A fizetésed sikeresen megtörtént.</p>
     <div class="highlight">
-      <p style="margin:0"><strong>Csomag:</strong> ${params.tierName}</p>
+      ${logoPreview}
+      ${params.logoName ? `<p style="margin:0"><strong>Logó:</strong> ${params.logoName}</p>` : ''}
+      <p style="margin:${params.logoName ? '8px 0 0' : '0'}"><strong>Csomag:</strong> ${params.tierName}</p>
       <p style="margin:8px 0 0"><strong>Összeg:</strong> ${params.amount} Ft</p>
       <p style="margin:8px 0 0"><strong>Dátum:</strong> ${params.date}</p>
     </div>
@@ -100,12 +116,20 @@ export function analysisCompleteEmail(params: {
   logoName: string;
   score: number;
   resultUrl: string;
+  logoThumbnailUrl?: string;
 }) {
   const subject = 'Elkészült a logó elemzésed – LogoLab';
+  const logoPreview = params.logoThumbnailUrl
+    ? `<div style="text-align:center;margin-bottom:12px;">
+        <img src="${params.logoThumbnailUrl}" alt="${params.logoName}" width="80" height="80"
+             style="width:80px;height:80px;object-fit:contain;border-radius:8px;background:#f9f9f9;" />
+      </div>`
+    : '';
   const html = layout(`
     <p>Szia ${params.name}!</p>
     <p>Elkészült a logód elemzése!</p>
     <div class="highlight">
+      ${logoPreview}
       <p style="margin:0"><strong>Logó:</strong> ${params.logoName}</p>
       <p style="margin:8px 0 0"><strong>Összpontszám:</strong> ${params.score}/100</p>
     </div>
@@ -274,6 +298,123 @@ export function consultationBookingEmail(params: {
       <a href="${params.adminUrl}" class="btn" style="${BTN_STYLE}">Elemzés megtekintése</a>
     </p>
     <p>Kérlek, vedd fel a kapcsolatot a felhasználóval időpont egyeztetés céljából.</p>
+  `);
+  return { subject, html };
+}
+
+// 10.12 Admin értesítő — sikeres fizetés
+export function adminPaymentSuccessEmail(params: {
+  userEmail: string;
+  userName: string;
+  tierName: string;
+  amount: string;
+  analysisId: string;
+}) {
+  const subject = `Sikeres fizetés: ${params.tierName} – LogoLab`;
+  const html = layout(`
+    <p><strong>Új fizetés érkezett!</strong></p>
+    <div class="highlight">
+      <p style="margin:0"><strong>Felhasználó:</strong> ${params.userName}</p>
+      <p style="margin:8px 0 0"><strong>Email:</strong> ${params.userEmail}</p>
+      <p style="margin:8px 0 0"><strong>Csomag:</strong> ${params.tierName}</p>
+      <p style="margin:8px 0 0"><strong>Összeg:</strong> ${params.amount} Ft</p>
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="${APP_URL}/admin" class="btn" style="${BTN_STYLE}">Admin panel</a>
+    </p>
+  `);
+  return { subject, html };
+}
+
+// 10.13 Admin értesítő — sikertelen fizetés
+export function adminPaymentFailedEmail(params: {
+  userEmail: string;
+  tierName: string;
+  reason: string;
+}) {
+  const subject = 'Sikertelen fizetés – LogoLab';
+  const html = layout(`
+    <p><strong>Sikertelen fizetési kísérlet!</strong></p>
+    <div class="highlight">
+      <p style="margin:0"><strong>Email:</strong> ${params.userEmail}</p>
+      <p style="margin:8px 0 0"><strong>Csomag:</strong> ${params.tierName}</p>
+      <p style="margin:8px 0 0"><strong>Ok:</strong> ${params.reason}</p>
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="${APP_URL}/admin" class="btn" style="${BTN_STYLE}">Admin panel</a>
+    </p>
+  `);
+  return { subject, html };
+}
+
+// 10.14 Admin értesítő — elemzés elkészült
+export function adminAnalysisCompleteEmail(params: {
+  userName: string;
+  userEmail: string;
+  logoName: string;
+  score: number;
+  analysisId: string;
+}) {
+  const subject = `Elemzés kész: ${params.logoName} (${params.score}/100) – LogoLab`;
+  const html = layout(`
+    <p><strong>Egy elemzés elkészült!</strong></p>
+    <div class="highlight">
+      <p style="margin:0"><strong>Felhasználó:</strong> ${params.userName}</p>
+      <p style="margin:8px 0 0"><strong>Email:</strong> ${params.userEmail}</p>
+      <p style="margin:8px 0 0"><strong>Logó:</strong> ${params.logoName}</p>
+      <p style="margin:8px 0 0"><strong>Összpontszám:</strong> ${params.score}/100</p>
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="${APP_URL}/eredmeny/${params.analysisId}" class="btn" style="${BTN_STYLE}">Eredmény megtekintése</a>
+    </p>
+  `);
+  return { subject, html };
+}
+
+// 10.15 Admin értesítő — sikertelen elemzés
+export function adminAnalysisFailedEmail(params: {
+  userName: string;
+  userEmail: string;
+  logoName: string;
+  analysisId: string;
+  errorMessage: string;
+}) {
+  const subject = `Sikertelen elemzés: ${params.logoName} – LogoLab`;
+  const html = layout(`
+    <p><strong>Egy elemzés meghiúsult!</strong></p>
+    <div class="highlight">
+      <p style="margin:0"><strong>Felhasználó:</strong> ${params.userName}</p>
+      <p style="margin:8px 0 0"><strong>Email:</strong> ${params.userEmail}</p>
+      <p style="margin:8px 0 0"><strong>Logó:</strong> ${params.logoName}</p>
+      <p style="margin:8px 0 0"><strong>Hiba:</strong> ${params.errorMessage}</p>
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="${APP_URL}/admin" class="btn" style="${BTN_STYLE}">Admin panel</a>
+    </p>
+  `);
+  return { subject, html };
+}
+
+// 10.16 Konzultáció visszaigazolás (user-nek)
+export function consultationConfirmationEmail(params: {
+  name: string;
+  logoName: string;
+  score: number;
+  resultUrl: string;
+}) {
+  const subject = 'Konzultációs csomagod aktív – LogoLab';
+  const html = layout(`
+    <p>Szia ${params.name}!</p>
+    <p>Köszönjük, hogy az <strong>Ultra csomagot</strong> választottad!</p>
+    <div class="highlight">
+      <p style="margin:0"><strong>Logó:</strong> ${params.logoName}</p>
+      <p style="margin:8px 0 0"><strong>Összpontszám:</strong> ${params.score}/100</p>
+    </div>
+    <p>Hamarosan felvesszük veled a kapcsolatot a <strong>20 perces szakértői konzultáció</strong> időpont egyeztetéséhez.</p>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="${params.resultUrl}" class="btn" style="${BTN_STYLE}">Eredmény megtekintése</a>
+    </p>
+    <p>Ha kérdésed van, írj nekünk: <a href="mailto:peti@brandguide.hu">peti@brandguide.hu</a></p>
   `);
   return { subject, html };
 }

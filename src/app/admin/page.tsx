@@ -54,7 +54,7 @@ interface FunnelData {
   funnel: FunnelStep[];
 }
 
-type Tab = 'dashboard' | 'pending' | 'all' | 'users' | 'funnel' | 'featured' | 'test';
+type Tab = 'dashboard' | 'pending' | 'all' | 'users' | 'funnel' | 'featured' | 'test' | 'settings';
 
 interface AdminEditModal {
   id: string;
@@ -111,6 +111,11 @@ export default function AdminPage() {
   const [testAnalysisResult, setTestAnalysisResult] = useState<string | null>(null);
   const [testDragOver, setTestDragOver] = useState(false);
 
+  // Settings state
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [bypassSecret, setBypassSecret] = useState('');
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -163,13 +168,14 @@ export default function AdminPage() {
       'Content-Type': 'application/json',
     };
 
-    const [statsRes, pendingRes, allRes, usersRes, funnelRes, featuredRes] = await Promise.all([
+    const [statsRes, pendingRes, allRes, usersRes, funnelRes, featuredRes, maintenanceRes] = await Promise.all([
       fetch('/api/admin?action=dashboard', { headers }),
       fetch('/api/admin?action=pending', { headers }),
       fetch('/api/admin?action=all', { headers }),
       fetch('/api/admin?action=users', { headers }),
       fetch(`/api/admin/funnel?days=${funnelDays}`, { headers }),
       fetch('/api/admin/featured-analyses', { headers }),
+      fetch('/api/admin/settings/maintenance', { headers }),
     ]);
 
     if (statsRes.ok) {
@@ -197,6 +203,11 @@ export default function AdminPage() {
       setHomepageFeatured(data.homepage || []);
       setGalleryFeatured(data.gallery || []);
       setAvailableItems(data.available || []);
+    }
+    if (maintenanceRes.ok) {
+      const data = await maintenanceRes.json();
+      setMaintenanceMode(data.maintenance_mode ?? false);
+      setBypassSecret(data.bypass_secret ?? '');
     }
     setIsLoading(false);
   };
@@ -262,6 +273,7 @@ export default function AdminPage() {
     { key: 'funnel', label: 'Funnel' },
     { key: 'featured', label: 'Minta elemzések', badge: homepageFeatured.length + galleryFeatured.length },
     { key: 'test', label: '🧪 Teszt elemzés' },
+    { key: 'settings', label: 'Beállítások' },
   ];
 
   // Test analysis functions
@@ -543,7 +555,14 @@ export default function AdminPage() {
       {/* Simple header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <a href="/" className="text-xl font-bold text-gray-900">LogoLab Admin</a>
+          <div className="flex items-center gap-3">
+            <a href="/" className="text-xl font-bold text-gray-900">LogoLab Admin</a>
+            {maintenanceMode && (
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full">
+                MAINTENANCE
+              </span>
+            )}
+          </div>
           <a href="/" className="text-sm text-gray-500 hover:text-gray-700">← Vissza</a>
         </div>
       </header>
@@ -1211,6 +1230,72 @@ export default function AdminPage() {
                 <strong>Tipp:</strong> Ez a teszt közvetlenül a <code className="bg-blue-100 px-1 rounded">/api/analyze</code> endpointot hívja meg SSE streaminggel.
                 Az elemzés a Supabase-be mentődik és megtekinthető az eredmény oldalon.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Settings tab */}
+        {tab === 'settings' && (
+          <div className="max-w-xl">
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Oldal állapota</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Maintenance módban a látogatók egy karbantartás oldalt látnak.
+              </p>
+
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={async () => {
+                    const next = !maintenanceMode;
+                    if (next && !window.confirm('Biztosan lezárod az oldalt a látogatók előtt?')) return;
+                    setMaintenanceLoading(true);
+                    try {
+                      const res = await fetch('/api/admin/settings/maintenance', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ enabled: next }),
+                      });
+                      if (res.ok) {
+                        setMaintenanceMode(next);
+                      } else {
+                        alert('Hiba történt a mentés során.');
+                      }
+                    } catch {
+                      alert('Hiba történt a mentés során.');
+                    }
+                    setMaintenanceLoading(false);
+                  }}
+                  disabled={maintenanceLoading}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                    maintenanceMode ? 'bg-orange-500' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+                      maintenanceMode ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <div>
+                  <p className={`text-sm font-medium ${maintenanceMode ? 'text-orange-600' : 'text-green-600'}`}>
+                    {maintenanceMode
+                      ? 'Maintenance mód BEKAPCSOLVA – a látogatók a karbantartás oldalt látják'
+                      : 'Az oldal normálisan elérhető'}
+                  </p>
+                </div>
+              </div>
+
+              {maintenanceMode && (
+                <div className="mt-6 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                  <p className="text-sm text-orange-800 mb-2 font-medium">Bypass link (csak adminoknak):</p>
+                  <code className="block text-xs bg-white px-3 py-2 rounded-lg border border-orange-200 text-orange-700 break-all select-all">
+                    {bypassSecret ? `https://logolab.hu/?bypass=${bypassSecret}` : 'MAINTENANCE_BYPASS_SECRET nincs beállítva a Netlify env-ben'}
+                  </code>
+                  <p className="text-xs text-orange-600 mt-2">
+                    A link megnyitása után 7 napig normálisan fogod látni az oldalt.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
