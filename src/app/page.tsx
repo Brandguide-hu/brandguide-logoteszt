@@ -6,7 +6,7 @@ import { FeaturedAnalysesSkeleton } from "@/components/landing/FeaturedAnalysesS
 
 export default function Home() {
     return (
-        <AppLayout hideFooter>
+        <AppLayout>
             <LandingContent
                 featuredSection={
                     <Suspense fallback={<FeaturedAnalysesSkeleton />}>

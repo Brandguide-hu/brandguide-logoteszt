@@ -115,6 +115,8 @@ export default function AdminPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const [bypassSecret, setBypassSecret] = useState('');
+  const [billingoDraftMode, setBillingoDraftMode] = useState(true);
+  const [billingoLoading, setBillingoLoading] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -168,7 +170,7 @@ export default function AdminPage() {
       'Content-Type': 'application/json',
     };
 
-    const [statsRes, pendingRes, allRes, usersRes, funnelRes, featuredRes, maintenanceRes] = await Promise.all([
+    const [statsRes, pendingRes, allRes, usersRes, funnelRes, featuredRes, maintenanceRes, billingoRes] = await Promise.all([
       fetch('/api/admin?action=dashboard', { headers }),
       fetch('/api/admin?action=pending', { headers }),
       fetch('/api/admin?action=all', { headers }),
@@ -176,6 +178,7 @@ export default function AdminPage() {
       fetch(`/api/admin/funnel?days=${funnelDays}`, { headers }),
       fetch('/api/admin/featured-analyses', { headers }),
       fetch('/api/admin/settings/maintenance', { headers }),
+      fetch('/api/admin/settings/billingo', { headers }),
     ]);
 
     if (statsRes.ok) {
@@ -208,6 +211,10 @@ export default function AdminPage() {
       const data = await maintenanceRes.json();
       setMaintenanceMode(data.maintenance_mode ?? false);
       setBypassSecret(data.bypass_secret ?? '');
+    }
+    if (billingoRes.ok) {
+      const data = await billingoRes.json();
+      setBillingoDraftMode(data.draft_mode ?? true);
     }
     setIsLoading(false);
   };
@@ -1296,6 +1303,55 @@ export default function AdminPage() {
                   </p>
                 </div>
               )}
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6 mt-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Billingo számlázás</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Piszkozat módban a Billingo csak draft számlát készít. Éles módban végleges számlát állít ki és elküldi emailben.
+              </p>
+
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={async () => {
+                    const next = !billingoDraftMode;
+                    if (!next && !window.confirm('Biztosan átváltasz éles számlázásra? A következő fizetéstől végleges számla készül és automatikusan kiküldésre kerül.')) return;
+                    setBillingoLoading(true);
+                    try {
+                      const res = await fetch('/api/admin/settings/billingo', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ draft_mode: next }),
+                      });
+                      if (res.ok) {
+                        setBillingoDraftMode(next);
+                      } else {
+                        alert('Hiba történt a mentés során.');
+                      }
+                    } catch {
+                      alert('Hiba történt a mentés során.');
+                    }
+                    setBillingoLoading(false);
+                  }}
+                  disabled={billingoLoading}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                    !billingoDraftMode ? 'bg-green-500' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+                      !billingoDraftMode ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <div>
+                  <p className={`text-sm font-medium ${!billingoDraftMode ? 'text-green-600' : 'text-gray-500'}`}>
+                    {billingoDraftMode
+                      ? 'Piszkozat mód — draft számla, nincs email küldés'
+                      : 'Éles mód — végleges számla + automatikus email küldés'}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}

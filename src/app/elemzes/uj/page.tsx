@@ -11,11 +11,12 @@ import { DropZone } from '@/components/upload/DropZone';
 import { Tier, Category, MockupCategory, TIER_INFO } from '@/types';
 import { cx } from '@/utils/cx';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { pushToDataLayer } from '@/lib/gtm';
 
 function NewAnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, profile, isLoading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isLoading: authLoading } = useAuth();
 
   // URL params
   const tierParam = searchParams.get('tier') as Tier | null;
@@ -150,6 +151,7 @@ function NewAnalysisContent() {
         referrer: document.referrer || null,
       }),
     }).catch(() => {}); // Fire and forget
+    pushToDataLayer('funnel_page_view', { tier: tierParam });
   }, []);
 
   // Validate form
@@ -191,6 +193,7 @@ function NewAnalysisContent() {
         hasEmail: !!email || !!user,
       }),
     }).catch(() => {});
+    pushToDataLayer('form_submit', { tier: selectedTier, has_email: !!email || !!user });
 
     try {
       // 1. Prepare: upload logo + form data to temp storage
@@ -223,8 +226,8 @@ function NewAnalysisContent() {
       // 2. Route based on tier + auth state
       if (user) {
         // --- BEJELENTKEZETT USER ---
-        if (selectedTier === 'free') {
-          // Free + logged in: start analysis immediately
+        if (selectedTier === 'free' || isAdmin) {
+          // Free + logged in VAGY Admin (bármely tier): skip Stripe
           const supabase = getSupabaseBrowserClient();
           const { data: { session } } = await supabase.auth.getSession();
           const createRes = await fetch('/api/analysis/create', {
@@ -246,7 +249,7 @@ function NewAnalysisContent() {
           const { analysisId } = await createRes.json();
           router.push(`/elemzes/feldolgozas/${analysisId}`);
         } else {
-          // Paid + logged in: Stripe checkout
+          // Paid + logged in (nem admin): Stripe checkout
           await redirectToStripe(pendingAnalysisId, selectedTier!, email || user.email!);
         }
       } else {
@@ -272,6 +275,7 @@ function NewAnalysisContent() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId, eventType: 'auth_started', tier: selectedTier }),
           }).catch(() => {});
+          pushToDataLayer('auth_started', { tier: selectedTier });
 
           router.push(`/elemzes/megerosites?email=${encodeURIComponent(email)}&pending=${pendingAnalysisId}`);
         } else {
@@ -296,6 +300,11 @@ function NewAnalysisContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, eventType: 'stripe_redirect', tier }),
     }).catch(() => {});
+    pushToDataLayer('begin_checkout', {
+      tier,
+      value: TIER_INFO[tier].priceBrutto,
+      currency: 'HUF',
+    });
 
     const checkoutRes = await fetch('/api/checkout/create-session', {
       method: 'POST',
@@ -333,6 +342,7 @@ function NewAnalysisContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, eventType: 'tier_selected', tier }),
     }).catch(() => {});
+    pushToDataLayer('tier_selected', { tier });
   };
 
   // Logo change tracking
@@ -346,6 +356,7 @@ function NewAnalysisContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, eventType: 'logo_selected', tier: selectedTier, hasLogo: true }),
       }).catch(() => {});
+      pushToDataLayer('logo_selected', { tier: selectedTier });
     }
   };
 

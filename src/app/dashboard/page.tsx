@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [analyses, setAnalyses] = useState<AnalysisSummary[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
   const [editModal, setEditModal] = useState<EditModal | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -76,6 +77,25 @@ export default function DashboardPage() {
       setAnalyses(prev => prev.filter(a => a.id !== analysisId));
     }
     setDeletingId(null);
+  };
+
+  const handlePublish = async (e: React.MouseEvent, analysisId: string) => {
+    e.stopPropagation();
+    if (!confirm('Szeretnéd beküldeni az elemzésedet a publikus galériába? A megjelenés jóváhagyás után történik.')) return;
+    setPublishingId(analysisId);
+    try {
+      const res = await fetch(`/api/analysis/${analysisId}/publish`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Hiba');
+      }
+      setAnalyses(prev => prev.map(a =>
+        a.id === analysisId ? { ...a, visibility: 'pending_approval' } : a
+      ));
+    } catch (err: any) {
+      alert(err.message || 'Hiba történt a publikálás során.');
+    }
+    setPublishingId(null);
   };
 
   const openEdit = (e: React.MouseEvent, analysis: AnalysisSummary) => {
@@ -259,6 +279,19 @@ export default function DashboardPage() {
                       </svg>
                       Szerkesztés
                     </button>
+                    {/* Publikálás gomb — kész, fizetett, privát elemzéseknél */}
+                    {isCompleted && isPaid && analysis.visibility === 'private' && (
+                      <button
+                        onClick={(e) => handlePublish(e, analysis.id)}
+                        disabled={publishingId === analysis.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {publishingId === analysis.id ? 'Küldés...' : 'Publikálás'}
+                      </button>
+                    )}
                     <div className="flex-1" />
                     {isPaid && (
                       <button

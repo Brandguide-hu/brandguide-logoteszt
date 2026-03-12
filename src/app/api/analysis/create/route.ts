@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 export const runtime = 'nodejs';
 
 // ⚠️ TESZTELÉSI FLAG: true = 24h limit kikapcsolva, false = normál működés
-const DISABLE_FREE_LIMIT = true;
+const DISABLE_FREE_LIMIT = false;
 
 /**
  * POST /api/analysis/create
@@ -49,11 +49,13 @@ export async function POST(request: NextRequest) {
     // Check if free tier daily limit
     const { data: profile } = await (admin
       .from('profiles') as any)
-      .select('last_free_analysis_at, last_free_analysis_ip')
+      .select('last_free_analysis_at, last_free_analysis_ip, is_admin')
       .eq('id', user.id)
       .single();
 
-    if (!DISABLE_FREE_LIMIT && pending.tier === 'free' && profile?.last_free_analysis_at) {
+    const isAdmin = profile?.is_admin === true;
+
+    if (!DISABLE_FREE_LIMIT && !isAdmin && pending.tier === 'free' && profile?.last_free_analysis_at) {
       const lastAnalysis = new Date(profile.last_free_analysis_at);
       const now = new Date();
       const hoursSince = (now.getTime() - lastAnalysis.getTime()) / (1000 * 60 * 60);
@@ -144,8 +146,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Hiba az elemzés létrehozásakor' }, { status: 500 });
     }
 
-    // Update free analysis timestamp + IP
-    if (pending.tier === 'free') {
+    // Update free analysis timestamp + IP (skip for admin)
+    if (pending.tier === 'free' && !isAdmin) {
       const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
         || request.headers.get('x-real-ip')
         || 'unknown';

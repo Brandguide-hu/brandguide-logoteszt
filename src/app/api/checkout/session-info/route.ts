@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
       status: session.payment_status,
       pendingAnalysisId,
       magicLinkToken,
+      tier: session.metadata?.tier || null,
+      amountTotal: session.amount_total || null,
+      currency: session.currency || 'huf',
     });
   } catch {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });

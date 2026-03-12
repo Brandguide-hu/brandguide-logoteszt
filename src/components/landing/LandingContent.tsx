@@ -111,7 +111,7 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                     </h1>
 
                     <p className="mx-auto mb-12 max-w-xl text-lg text-gray-500 opacity-0 animate-[fadeIn_0.8s_ease_0.4s_forwards] md:text-xl">
-                        Szigorú szakmai szempontoknak kell megfelelnie. Mi megmutatjuk, miben erős és miben fejleszthető a feltöltött logó. Elemeztesd most!
+                        A LogoLab az AI erejét kombinálja a professzionális branding módszertannal, hogy mindenki számára elérhetővé tegye az objektív logó értékelést, ezzel javítva az eredményeket és hatást.
                     </p>
 
                     {/* CTA */}
@@ -517,29 +517,29 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                     </div>
 
                     <div className="grid gap-6 md:grid-cols-3">
-                        {/* Free - Coming Soon */}
-                        <div className="relative rounded-2xl border border-gray-100 bg-white p-8 opacity-70">
-                            <div className="absolute -top-3 right-6 rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600">
-                                Hamarosan
+                        {/* Free / Light */}
+                        <button onClick={() => handleLogoElemzes('free')} className="group text-left cursor-pointer">
+                            <div className="h-full rounded-2xl border border-gray-100 bg-white p-8 transition-all duration-300 hover:border-gray-200 hover:shadow-md">
+                                <div className="mb-6 inline-flex rounded-xl bg-gray-100 p-3">
+                                    <BarChart01 className="size-6 text-gray-500" />
+                                </div>
+                                <h3 className="mb-2 text-xl font-medium text-gray-900">{TIER_INFO.free.label}</h3>
+                                <div className="mb-1 text-3xl font-bold text-gray-900">0 <span className="text-base font-normal text-gray-400">Ft</span></div>
+                                <p className="mb-6 text-sm text-gray-500">Naponta 1 elemzés</p>
+                                <ul className="mb-8 space-y-3">
+                                    {TIER_INFO.free.features.map((item) => (
+                                        <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                                            <CheckCircle className="size-4 text-gray-400" />
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-sm font-medium text-gray-700 transition-all group-hover:bg-gray-200">
+                                    Kipróbálom
+                                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+                                </div>
                             </div>
-                            <div className="mb-6 inline-flex rounded-xl bg-gray-100 p-3">
-                                <BarChart01 className="size-6 text-gray-400" />
-                            </div>
-                            <h3 className="mb-2 text-xl font-medium text-gray-700">{TIER_INFO.free.label}</h3>
-                            <div className="mb-1 text-3xl font-bold text-gray-700">0 <span className="text-base font-normal text-gray-400">Ft</span></div>
-                            <p className="mb-6 text-sm text-gray-400">Naponta 1 elemzés</p>
-                            <ul className="mb-8 space-y-3">
-                                {TIER_INFO.free.features.map((item) => (
-                                    <li key={item} className="flex items-center gap-3 text-sm text-gray-400">
-                                        <CheckCircle className="size-4 text-gray-200" />
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                            <div className="w-full flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-sm font-medium text-gray-400 cursor-not-allowed">
-                                Hamarosan elérhető
-                            </div>
-                        </div>
+                        </button>
 
                         {/* Paid - Highlighted */}
                         <button onClick={() => handleLogoElemzes('paid')} className="group text-left cursor-pointer">
@@ -550,7 +550,13 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                                 <div className="mb-6 inline-flex rounded-xl bg-[#fff012]/20 p-3">
                                     <Stars01 className="size-6 text-gray-700" />
                                 </div>
-                                <h3 className="mb-2 text-xl font-medium text-gray-900">{TIER_INFO.paid.label}</h3>
+                                <div className="mb-2 flex items-center gap-2">
+                                    <h3 className="text-xl font-medium text-gray-900">{TIER_INFO.paid.label}</h3>
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Early bird</span>
+                                </div>
+                                <div className="mb-1">
+                                    <span className="text-base text-gray-400 line-through">3 990 Ft + ÁFA</span>
+                                </div>
                                 <div className="mb-1 text-3xl font-bold text-gray-900">1 990 <span className="text-base font-normal text-gray-400">Ft + ÁFA</span></div>
                                 <p className="mb-6 text-sm text-gray-500">Bruttó {TIER_INFO.paid.priceBrutto.toLocaleString('hu-HU')} Ft</p>
                                 <ul className="mb-8 space-y-3">
@@ -562,7 +568,7 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                                     ))}
                                 </ul>
                                 <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-all group-hover:bg-gray-800">
-                                    Max csomag — rendelés
+                                    Ezt kérem
                                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
                                 </div>
                             </div>
@@ -574,7 +580,13 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                                 <div className="mb-6 inline-flex rounded-xl bg-gray-100 p-3">
                                     <Lightbulb05 className="size-6 text-gray-500" />
                                 </div>
-                                <h3 className="mb-2 text-xl font-medium text-gray-900">{TIER_INFO.consultation.label}</h3>
+                                <div className="mb-2 flex items-center gap-2">
+                                    <h3 className="text-xl font-medium text-gray-900">{TIER_INFO.consultation.label}</h3>
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Early bird</span>
+                                </div>
+                                <div className="mb-1">
+                                    <span className="text-base text-gray-400 line-through">34 990 Ft + ÁFA</span>
+                                </div>
                                 <div className="mb-1 text-3xl font-bold text-gray-900">24 990 <span className="text-base font-normal text-gray-400">Ft + ÁFA</span></div>
                                 <p className="mb-6 text-sm text-gray-500">Bruttó {TIER_INFO.consultation.priceBrutto.toLocaleString('hu-HU')} Ft</p>
                                 <ul className="mb-8 space-y-3">
@@ -586,7 +598,7 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                                     ))}
                                 </ul>
                                 <div className="flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-sm font-medium text-gray-700 transition-all group-hover:bg-gray-200">
-                                    Ultra csomag — rendelés
+                                    Ezt kérem
                                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
                                 </div>
                             </div>
@@ -619,15 +631,6 @@ export function LandingContent({ featuredSection }: { featuredSection: ReactNode
                     </button>
                 </div>
             </section>
-
-            {/* Footer */}
-            <footer className="border-t border-gray-100 px-4 py-8 sm:px-6 lg:px-8">
-                <div className="mx-auto max-w-5xl text-center">
-                    <p className="text-xs text-gray-400">
-                        &copy; 2025 brandguide. Minden jog fenntartva.
-                    </p>
-                </div>
-            </footer>
 
             {/* Global animations */}
             <style jsx global>{`

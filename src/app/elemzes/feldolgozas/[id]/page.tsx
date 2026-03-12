@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle, Stars01 } from '@untitledui/icons';
 import { TransparentVideo } from '@/components/TransparentVideo';
 import { ResultSkeleton } from '@/components/results';
+import { pushToDataLayer } from '@/lib/gtm';
 
 // Loading messages that cycle during analysis
 const LOADING_MESSAGES = {
@@ -50,16 +51,16 @@ const LOADING_MESSAGES = {
   ],
 };
 
-// Direct brandguideAI pipeline phases
+// Direct brandguideAI pipeline phases — 5 belső lépés, 4 vizuális fázis
 type Phase = 'start' | 'vision' | 'analysis' | 'brandguide_analysis' | 'comparing' | 'processing' | 'visual' | 'saving' | 'complete';
 
 const phaseProgress: Record<Phase, number> = {
   start: 5,
-  vision: 15,
-  analysis: 30,  // Az API ezt küldi
-  brandguide_analysis: 30,
-  comparing: 70,
-  processing: 85,
+  vision: 10,
+  analysis: 25,           // Step 2: Scoring
+  brandguide_analysis: 25,
+  comparing: 50,          // Step 3: Summary
+  processing: 70,         // Step 4: Details
   visual: 92,
   saving: 97,
   complete: 100,
@@ -70,27 +71,43 @@ const phaseLabels: Record<Phase, string> = {
   vision: 'Kép elemzés',
   analysis: 'Pontozás',
   brandguide_analysis: 'Pontozás',
-  comparing: 'Feldolgozás',
-  processing: 'Részletek',
+  comparing: 'Összefoglaló',
+  processing: 'Részletes elemzés',
   visual: 'Vizuális elemzés',
   saving: 'Mentés',
   complete: 'Kész',
 };
 
-// Vizuális lépések — 5 lépés amit a user lát (ezek a "fake" közbülső állomások)
-const phaseSteps: Phase[] = ['vision', 'brandguide_analysis', 'comparing', 'processing', 'saving'];
+// Vizuális lépések — 4 fázis amit a user lát
+const phaseSteps: Phase[] = ['vision', 'brandguide_analysis', 'comparing', 'processing'];
 
-// A hosszú várakozás (30–70%) alatt megjelenő al-fázis üzenetek
-const ANALYSIS_SUBSTEPS = [
-  { pct: 30, label: 'Megkülönböztethetőség vizsgálata...' },
-  { pct: 36, label: 'Egyszerűség elemzése...' },
-  { pct: 42, label: 'Alkalmazhatóság tesztelése...' },
-  { pct: 48, label: 'Emlékezetesség felmérése...' },
-  { pct: 54, label: 'Időtállóság értékelése...' },
-  { pct: 60, label: 'Univerzalitás ellenőrzése...' },
-  { pct: 65, label: 'Láthatóság vizsgálata...' },
-  { pct: 72, label: 'Vizuális elemzés készítése...' },
-  { pct: 80, label: 'Színvakság szimulációk...' },
+// Scoring fázis (25–50%) al-lépés üzenetek
+const SCORING_SUBSTEPS = [
+  { pct: 25, label: 'Megkülönböztethetőség vizsgálata...' },
+  { pct: 29, label: 'Egyszerűség elemzése...' },
+  { pct: 33, label: 'Alkalmazhatóság tesztelése...' },
+  { pct: 37, label: 'Emlékezetesség felmérése...' },
+  { pct: 41, label: 'Időtállóság értékelése...' },
+  { pct: 45, label: 'Univerzalitás ellenőrzése...' },
+  { pct: 48, label: 'Láthatóság vizsgálata...' },
+];
+
+// Summary fázis (50–68%) al-lépés üzenetek
+const SUMMARY_SUBSTEPS = [
+  { pct: 50, label: 'Összefoglaló készítése...' },
+  { pct: 55, label: 'Erősségek összegyűjtése...' },
+  { pct: 60, label: 'Fejlesztendő területek...' },
+  { pct: 65, label: 'Mentori értékelés...' },
+];
+
+// Details + Javaslatok fázis (70–90%) al-lépés üzenetek
+const DETAILS_SUBSTEPS = [
+  { pct: 70, label: 'Színpaletta elemzése...' },
+  { pct: 74, label: 'Tipográfia értékelése...' },
+  { pct: 78, label: 'Vizuális nyelv elemzése...' },
+  { pct: 82, label: 'Javaslatok generálása...' },
+  { pct: 86, label: 'Részletes javaslatok...' },
+  { pct: 90, label: 'Eredmények véglegesítése...' },
 ];
 
 function FeldolgozasContent() {
@@ -124,29 +141,61 @@ function FeldolgozasContent() {
 
   useEffect(() => {
     const baseProgress = phaseProgress[streamingPhase] ?? 0;
-    // Ha elértük a valós phase progress-t, egyből ugrik
-    if (streamingPhase !== 'analysis' && streamingPhase !== 'brandguide_analysis') {
-      setAnimatedProgress(baseProgress);
-      return;
+
+    // Scoring fázis: 25-tól lassan 48%-ig auto-növekszik (~40s alatt)
+    if (streamingPhase === 'analysis' || streamingPhase === 'brandguide_analysis') {
+      setAnimatedProgress(25);
+      let current = 25;
+      const interval = setInterval(() => {
+        if (current < 48) {
+          current += 1;
+          setAnimatedProgress(current);
+          const step = [...SCORING_SUBSTEPS].reverse().find(s => current >= s.pct);
+          if (step) setAnimatedSubLabel(step.label);
+        } else {
+          clearInterval(interval);
+        }
+      }, 1700); // ~1.7s / 1% → 23 lépés = ~39s
+      return () => clearInterval(interval);
     }
 
-    // analysis fázisban: 30-tól lassan 68%-ig auto-növekszik (~75mp alatt)
-    // 75mp / (68-30) = ~2s / 1%
-    setAnimatedProgress(30);
-    let current = 30;
-    const interval = setInterval(() => {
-      if (current < 68) {
-        current += 1;
-        setAnimatedProgress(current);
-        // Keressük a legközelebbi substep üzenetet
-        const step = [...ANALYSIS_SUBSTEPS].reverse().find(s => current >= s.pct);
-        if (step) setAnimatedSubLabel(step.label);
-      } else {
-        clearInterval(interval);
-      }
-    }, 2000); // 2 másodpercenként +1% → 38 lépés = ~76mp
+    // Summary fázis: 50-től lassan 68%-ig auto-növekszik (~30s alatt)
+    if (streamingPhase === 'comparing') {
+      setAnimatedProgress(50);
+      let current = 50;
+      const interval = setInterval(() => {
+        if (current < 68) {
+          current += 1;
+          setAnimatedProgress(current);
+          const step = [...SUMMARY_SUBSTEPS].reverse().find(s => current >= s.pct);
+          if (step) setAnimatedSubLabel(step.label);
+        } else {
+          clearInterval(interval);
+        }
+      }, 1700); // ~1.7s / 1% → 18 lépés = ~30s
+      return () => clearInterval(interval);
+    }
 
-    return () => clearInterval(interval);
+    // Details + Javaslatok fázis: 70-től lassan 90%-ig auto-növekszik (~40s alatt)
+    if (streamingPhase === 'processing') {
+      setAnimatedProgress(70);
+      let current = 70;
+      const interval = setInterval(() => {
+        if (current < 90) {
+          current += 1;
+          setAnimatedProgress(current);
+          const step = [...DETAILS_SUBSTEPS].reverse().find(s => current >= s.pct);
+          if (step) setAnimatedSubLabel(step.label);
+        } else {
+          clearInterval(interval);
+        }
+      }, 2000); // ~2s / 1% → 20 lépés = ~40s
+      return () => clearInterval(interval);
+    }
+
+    // Minden más fázis: egyből a valós értékre ugrik
+    setAnimatedProgress(baseProgress);
+    setAnimatedSubLabel('');
   }, [streamingPhase]);
 
   // Cycle through loading messages based on current phase
@@ -159,11 +208,11 @@ function FeldolgozasContent() {
     } else if (streamingPhase === 'brandguide_analysis' || streamingPhase === 'analysis') {
       messages = LOADING_MESSAGES.scoring;
     } else if (streamingPhase === 'comparing') {
-      messages = LOADING_MESSAGES.colors;
+      // Summary fázis — színek, tipográfia, vizuális nyelv
+      messages = [...LOADING_MESSAGES.colors, ...LOADING_MESSAGES.typography, ...LOADING_MESSAGES.visual];
     } else if (streamingPhase === 'processing') {
-      messages = LOADING_MESSAGES.typography;
-    } else if (streamingPhase === 'visual') {
-      messages = LOADING_MESSAGES.visual;
+      // Suggestions fázis
+      messages = LOADING_MESSAGES.processing;
     } else if (streamingPhase === 'saving') {
       messages = LOADING_MESSAGES.processing;
     }
@@ -274,6 +323,7 @@ function FeldolgozasContent() {
                   clearTimeout(watchdogTimeout);
                   completed = true;
                   setStreamingPhase('complete');
+                  pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: 'free' });
                   // Email notification fallback (fire-and-forget)
                   fetch('/api/email/send-completion', {
                     method: 'POST',
@@ -408,7 +458,7 @@ function FeldolgozasContent() {
     // ========================================
     // STEP 1: Vision SSE (~22s) — Next.js route
     // ========================================
-    addDebugLog('Step 1/3: Vision...');
+    addDebugLog('Step 1/6: Vision...');
     setStreamingPhase('vision');
     setPhaseStartTime(prev => ({ ...prev, vision: Date.now() }));
 
@@ -444,7 +494,7 @@ function FeldolgozasContent() {
     // ========================================
     // STEP 2: Scoring — Supabase Edge Function (nincs 60s limit)
     // ========================================
-    addDebugLog('Step 2/3: Scoring (Supabase function)...');
+    addDebugLog('Step 2/6: Scoring (Supabase function)...');
     setStreamingPhase('analysis');
     setPhaseStartTime(prev => ({ ...prev, analysis: Date.now() }));
 
@@ -463,16 +513,16 @@ function FeldolgozasContent() {
     if (!scoringRes.ok) {
       const scoringErr = await scoringRes.json().catch(() => ({ error: 'Scoring hiba' }));
       addDebugLog(`Scoring HIBA (${scoringElapsed}s): ${scoringErr.error}`);
-      throw new Error(scoringErr.error || 'Scoring hiba');
+      throw new Error(`Scoring hiba (${scoringElapsed}s): ${scoringErr.error || 'ismeretlen'}`);
     }
 
     const scoringData = await scoringRes.json();
     addDebugLog(`Scoring kész (${scoringElapsed}s)! Pontszám: ${scoringData.score}`);
 
     // ========================================
-    // STEP 3: Summary — Supabase Edge Function (nincs 60s limit)
+    // STEP 3: Summary — Supabase Edge Function (összefoglaló, erősségek, fejlesztendő)
     // ========================================
-    addDebugLog('Step 3/3: Summary (Supabase function)...');
+    addDebugLog('Step 3/6: Summary (Supabase function)...');
     setStreamingPhase('comparing');
     setPhaseStartTime(prev => ({ ...prev, comparing: Date.now() }));
 
@@ -491,11 +541,119 @@ function FeldolgozasContent() {
     if (!summaryRes.ok) {
       const summaryErr = await summaryRes.json().catch(() => ({ error: 'Summary hiba' }));
       addDebugLog(`Summary HIBA (${summaryElapsed}s): ${summaryErr.error}`);
-      throw new Error(summaryErr.error || 'Summary hiba');
+      throw new Error(`Summary hiba (${summaryElapsed}s): ${summaryErr.error || 'ismeretlen'}`);
     }
 
-    const summaryData = await summaryRes.json();
     addDebugLog(`Summary kész (${summaryElapsed}s)!`);
+
+    // ========================================
+    // STEP 4: Details — Supabase Edge Function (színek, tipográfia, vizuális nyelv)
+    // ========================================
+    addDebugLog('Step 4/6: Details (Supabase function)...');
+    setStreamingPhase('processing');
+    setPhaseStartTime(prev => ({ ...prev, processing: Date.now() }));
+
+    const detailsStartTime = Date.now();
+    const detailsRes = await fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ analysisId, visionDescription, step: 'details', brief }),
+    });
+
+    const detailsElapsed = ((Date.now() - detailsStartTime) / 1000).toFixed(1);
+
+    if (!detailsRes.ok) {
+      const detailsErr = await detailsRes.json().catch(() => ({ error: 'Details hiba' }));
+      addDebugLog(`Details HIBA (${detailsElapsed}s): ${detailsErr.error}`);
+      throw new Error(`Details hiba (${detailsElapsed}s): ${detailsErr.error || 'ismeretlen'}`);
+    }
+
+    addDebugLog(`Details kész (${detailsElapsed}s)!`);
+
+    // ========================================
+    // STEP 5: Párhuzamos javaslatok (suggestions-a + suggestions-b + detail-suggestions)
+    // ========================================
+    addDebugLog('Step 5/6: Párhuzamos javaslatok (3 fetch egyszerre)...');
+
+    const parallelStartTime = Date.now();
+    const edgeFnHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    };
+
+    const [sugARes, sugBRes, detSugRes] = await Promise.all([
+      fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+        method: 'POST',
+        headers: edgeFnHeaders,
+        body: JSON.stringify({ analysisId, visionDescription, step: 'suggestions-a' }),
+      }),
+      fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+        method: 'POST',
+        headers: edgeFnHeaders,
+        body: JSON.stringify({ analysisId, visionDescription, step: 'suggestions-b' }),
+      }),
+      fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+        method: 'POST',
+        headers: edgeFnHeaders,
+        body: JSON.stringify({ analysisId, visionDescription, step: 'detail-suggestions' }),
+      }),
+    ]);
+
+    const parallelElapsed = ((Date.now() - parallelStartTime) / 1000).toFixed(1);
+
+    // Mindhárom critical — bármelyik hiba → throw
+    if (!sugARes.ok) {
+      const sugAErr = await sugARes.json().catch(() => ({ error: 'Suggestions-A hiba' }));
+      addDebugLog(`Suggestions-A HIBA (${parallelElapsed}s): ${sugAErr.error}`);
+      throw new Error(`Suggestions-A hiba (${parallelElapsed}s): ${sugAErr.error || 'ismeretlen'}`);
+    }
+    if (!sugBRes.ok) {
+      const sugBErr = await sugBRes.json().catch(() => ({ error: 'Suggestions-B hiba' }));
+      addDebugLog(`Suggestions-B HIBA (${parallelElapsed}s): ${sugBErr.error}`);
+      throw new Error(`Suggestions-B hiba (${parallelElapsed}s): ${sugBErr.error || 'ismeretlen'}`);
+    }
+    if (!detSugRes.ok) {
+      const detSugErr = await detSugRes.json().catch(() => ({ error: 'Detail-suggestions hiba' }));
+      addDebugLog(`Detail-suggestions HIBA (${parallelElapsed}s): ${detSugErr.error}`);
+      throw new Error(`Detail-suggestions hiba (${parallelElapsed}s): ${detSugErr.error || 'ismeretlen'}`);
+    }
+
+    const sugAData = await sugARes.json();
+    const sugBData = await sugBRes.json();
+    const detSugData = await detSugRes.json();
+
+    addDebugLog(`Párhuzamos javaslatok kész (${parallelElapsed}s)! A: ${sugAData.elapsed}, B: ${sugBData.elapsed}, Det: ${detSugData.elapsed}`);
+
+    // ========================================
+    // STEP 6: Finalize — merge + DB save + completed
+    // ========================================
+    addDebugLog('Step 6/6: Finalize (merge + DB save)...');
+
+    const finalizeStartTime = Date.now();
+    const finalizeRes = await fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+      method: 'POST',
+      headers: edgeFnHeaders,
+      body: JSON.stringify({
+        analysisId,
+        step: 'finalize',
+        suggestionsAData: sugAData.data?.javaslatok,
+        suggestionsBData: sugBData.data?.javaslatok,
+        detailSuggestionsData: detSugData.data,
+      }),
+    });
+
+    const finalizeElapsed = ((Date.now() - finalizeStartTime) / 1000).toFixed(1);
+
+    if (!finalizeRes.ok) {
+      const finalizeErr = await finalizeRes.json().catch(() => ({ error: 'Finalize hiba' }));
+      addDebugLog(`Finalize HIBA (${finalizeElapsed}s): ${finalizeErr.error}`);
+      throw new Error(`Finalize hiba (${finalizeElapsed}s): ${finalizeErr.error || 'ismeretlen'}`);
+    }
+
+    addDebugLog(`Finalize kész (${finalizeElapsed}s)!`);
 
     // Visual analysis trigger (paid/consultation tier)
     if (tier === 'paid' || tier === 'consultation') {
@@ -509,17 +667,12 @@ function FeldolgozasContent() {
       });
     }
 
-    // Email notification fallback (fire-and-forget)
-    addDebugLog('Email értesítés küldése...');
-    fetch('/api/email/send-completion', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ analysisId }),
-    }).catch(err => addDebugLog(`Email notify hiba: ${err.message}`));
+    // Email: finalize step-ben már elküldtük (analysis-notify), itt NEM kell duplikálni
 
     // Redirect to results
     addDebugLog('Elemzés kész! Redirect...');
     setStreamingPhase('complete');
+    pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: 'free' });
     setTimeout(() => { router.push(`/eredmeny/${analysisId}`); }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisId, router, readSSEStream]);
@@ -545,6 +698,7 @@ function FeldolgozasContent() {
       // Ha már completed, egyből redirect
       if (analysisData.status === 'completed' && analysisData.result && Object.keys(analysisData.result).length > 0) {
         addDebugLog('Már kész, redirect...');
+        pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: analysisData.tier });
         router.push(`/eredmeny/${analysisId}`);
         return;
       }
@@ -557,35 +711,191 @@ function FeldolgozasContent() {
         setLogoThumbnail(thumbUrl);
       }
 
-      // Ha processing ÉS VAN eredmény (valóban fut), akkor polling amíg kész lesz
+      // Ha processing ÉS VAN eredmény → ellenőrizzük, hogy stale-e
       if (analysisData.status === 'processing' && analysisData.result && Object.keys(analysisData.result).length > 0) {
-        addDebugLog('Már fut (processing+result), polling mód...');
-        setStreamingPhase('brandguide_analysis');
+        const resultObj = analysisData.result as Record<string, unknown>;
+        const hasOsszegzes = !!resultObj.osszegzes;
+        const resultCreatedAt = resultObj.createdAt ? new Date(resultObj.createdAt as string).getTime() : 0;
+        const ageSeconds = resultCreatedAt ? (Date.now() - resultCreatedAt) / 1000 : Infinity;
 
-        const pollInterval = setInterval(async () => {
-          const pollRes = await fetch(`/api/result/${analysisId}`);
-          if (pollRes.ok) {
-            const pollData = await pollRes.json();
-            if (pollData.status === 'completed') {
-              clearInterval(pollInterval);
-              setStreamingPhase('complete');
-              // Email notification fallback (fire-and-forget)
-              fetch('/api/email/send-completion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ analysisId }),
-              }).catch(() => {});
-              setTimeout(() => {
-                router.push(`/eredmeny/${analysisId}`);
-              }, 500);
-            } else if (pollData.status === 'failed' || pollData.status === 'error') {
-              clearInterval(pollInterval);
-              addDebugLog(`Poll: HIBA! status=${pollData.status}`);
-              setError('Az elemzés során hiba történt. Kérlek próbáld újra.');
+        addDebugLog(`Processing+result: osszegzes=${hasOsszegzes}, age=${ageSeconds.toFixed(0)}s`);
+
+        // Ha van összegzés → redirect (summary lefutott de status nem frissült)
+        if (hasOsszegzes) {
+          addDebugLog('Van összegzés, redirect...');
+          pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: analysisData.tier });
+          router.push(`/eredmeny/${analysisId}`);
+          return;
+        }
+
+        // Ha friss (< 120s) → valaki éppen dolgozik rajta, polling
+        if (ageSeconds < 120) {
+          addDebugLog(`Friss (${ageSeconds.toFixed(0)}s), polling mód...`);
+          setStreamingPhase('brandguide_analysis');
+
+          const pollInterval = setInterval(async () => {
+            const pollRes = await fetch(`/api/result/${analysisId}`);
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              if (pollData.status === 'completed') {
+                clearInterval(pollInterval);
+                setStreamingPhase('complete');
+                pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: analysisData.tier });
+                fetch('/api/email/send-completion', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ analysisId }),
+                }).catch(() => {});
+                setTimeout(() => { router.push(`/eredmeny/${analysisId}`); }, 500);
+              } else if (pollData.status === 'failed' || pollData.status === 'error') {
+                clearInterval(pollInterval);
+                addDebugLog(`Poll: HIBA! status=${pollData.status}`);
+                setError('Az elemzés során hiba történt. Kérlek próbáld újra.');
+              }
             }
-          }
-        }, 2000);
+          }, 2000);
 
+          return;
+        }
+
+        // Stale (> 120s) — scoring kész, summary/details nem futott le → folytatás
+        addDebugLog(`Stale processing (${ageSeconds.toFixed(0)}s) — folytatás summary-tól...`);
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (!supabaseUrl || !supabaseAnonKey) {
+          throw new Error('Supabase konfiguráció hiányzik');
+        }
+
+        const edgeFnHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        };
+
+        // Resume Step 3: Summary
+        setStreamingPhase('comparing');
+        setPhaseStartTime(prev => ({ ...prev, comparing: Date.now() }));
+        addDebugLog('Resume Step 3/6: Summary...');
+
+        const summaryStartTime = Date.now();
+        const summaryRes = await fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+          method: 'POST',
+          headers: edgeFnHeaders,
+          body: JSON.stringify({ analysisId, step: 'summary', brief: analysisData.brief }),
+        });
+
+        const summaryElapsed = ((Date.now() - summaryStartTime) / 1000).toFixed(1);
+        if (!summaryRes.ok) {
+          const summaryErr = await summaryRes.json().catch(() => ({ error: 'Summary hiba' }));
+          addDebugLog(`Summary HIBA (${summaryElapsed}s): ${summaryErr.error}`);
+          throw new Error(`Summary hiba (${summaryElapsed}s): ${summaryErr.error || 'ismeretlen'}`);
+        }
+        addDebugLog(`Summary kész (${summaryElapsed}s)!`);
+
+        // Resume Step 4: Details
+        setStreamingPhase('processing');
+        setPhaseStartTime(prev => ({ ...prev, processing: Date.now() }));
+        addDebugLog('Resume Step 4/6: Details...');
+
+        const detailsStartTime = Date.now();
+        const detailsRes = await fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+          method: 'POST',
+          headers: edgeFnHeaders,
+          body: JSON.stringify({ analysisId, step: 'details', brief: analysisData.brief }),
+        });
+
+        const detailsElapsed = ((Date.now() - detailsStartTime) / 1000).toFixed(1);
+        if (!detailsRes.ok) {
+          const detailsErr = await detailsRes.json().catch(() => ({ error: 'Details hiba' }));
+          addDebugLog(`Details HIBA (${detailsElapsed}s): ${detailsErr.error}`);
+          throw new Error(`Details hiba (${detailsElapsed}s): ${detailsErr.error || 'ismeretlen'}`);
+        }
+        addDebugLog(`Details kész (${detailsElapsed}s)!`);
+
+        // Resume Step 5: Párhuzamos javaslatok
+        addDebugLog('Resume Step 5/6: Párhuzamos javaslatok (3 fetch egyszerre)...');
+        const parallelStartTime = Date.now();
+
+        const [sugARes, sugBRes, detSugRes] = await Promise.all([
+          fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+            method: 'POST',
+            headers: edgeFnHeaders,
+            body: JSON.stringify({ analysisId, step: 'suggestions-a' }),
+          }),
+          fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+            method: 'POST',
+            headers: edgeFnHeaders,
+            body: JSON.stringify({ analysisId, step: 'suggestions-b' }),
+          }),
+          fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+            method: 'POST',
+            headers: edgeFnHeaders,
+            body: JSON.stringify({ analysisId, step: 'detail-suggestions' }),
+          }),
+        ]);
+
+        const parallelElapsed = ((Date.now() - parallelStartTime) / 1000).toFixed(1);
+
+        if (!sugARes.ok) {
+          const sugAErr = await sugARes.json().catch(() => ({ error: 'Suggestions-A hiba' }));
+          addDebugLog(`Suggestions-A HIBA (${parallelElapsed}s): ${sugAErr.error}`);
+          throw new Error(`Suggestions-A hiba (${parallelElapsed}s): ${sugAErr.error || 'ismeretlen'}`);
+        }
+        if (!sugBRes.ok) {
+          const sugBErr = await sugBRes.json().catch(() => ({ error: 'Suggestions-B hiba' }));
+          addDebugLog(`Suggestions-B HIBA (${parallelElapsed}s): ${sugBErr.error}`);
+          throw new Error(`Suggestions-B hiba (${parallelElapsed}s): ${sugBErr.error || 'ismeretlen'}`);
+        }
+        if (!detSugRes.ok) {
+          const detSugErr = await detSugRes.json().catch(() => ({ error: 'Detail-suggestions hiba' }));
+          addDebugLog(`Detail-suggestions HIBA (${parallelElapsed}s): ${detSugErr.error}`);
+          throw new Error(`Detail-suggestions hiba (${parallelElapsed}s): ${detSugErr.error || 'ismeretlen'}`);
+        }
+
+        const sugAData = await sugARes.json();
+        const sugBData = await sugBRes.json();
+        const detSugData = await detSugRes.json();
+
+        addDebugLog(`Párhuzamos javaslatok kész (${parallelElapsed}s)!`);
+
+        // Resume Step 6: Finalize
+        addDebugLog('Resume Step 6/6: Finalize...');
+        const finalizeStartTime = Date.now();
+        const finalizeRes = await fetch(`${supabaseUrl}/functions/v1/analyze-pipeline`, {
+          method: 'POST',
+          headers: edgeFnHeaders,
+          body: JSON.stringify({
+            analysisId,
+            step: 'finalize',
+            suggestionsAData: sugAData.data?.javaslatok,
+            suggestionsBData: sugBData.data?.javaslatok,
+            detailSuggestionsData: detSugData.data,
+          }),
+        });
+
+        const finalizeElapsed = ((Date.now() - finalizeStartTime) / 1000).toFixed(1);
+        if (!finalizeRes.ok) {
+          const finalizeErr = await finalizeRes.json().catch(() => ({ error: 'Finalize hiba' }));
+          addDebugLog(`Finalize HIBA (${finalizeElapsed}s): ${finalizeErr.error}`);
+          throw new Error(`Finalize hiba (${finalizeElapsed}s): ${finalizeErr.error || 'ismeretlen'}`);
+        }
+        addDebugLog(`Finalize kész (${finalizeElapsed}s)!`);
+
+        // Visual analysis trigger (paid/consultation tier)
+        if (analysisData.tier === 'paid' || analysisData.tier === 'consultation') {
+          fetch('/api/analyze/visual-trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ analysisId }),
+          }).catch(err => addDebugLog(`Visual trigger hiba: ${err.message}`));
+        }
+
+        // Email: finalize step-ben már elküldtük (analysis-notify), itt NEM kell duplikálni
+
+        addDebugLog('Resume kész! Redirect...');
+        setStreamingPhase('complete');
+        pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: analysisData.tier });
+        setTimeout(() => { router.push(`/eredmeny/${analysisId}`); }, 800);
         return;
       }
 
@@ -635,6 +945,7 @@ function FeldolgozasContent() {
           if (pollData.status === 'completed') {
             clearInterval(pollInterval);
             setStreamingPhase('complete');
+            pushToDataLayer('analysis_complete', { analysis_id: analysisId, tier: analysisData.tier });
             // Email notification fallback (fire-and-forget)
             fetch('/api/email/send-completion', {
               method: 'POST',
@@ -743,7 +1054,7 @@ function FeldolgozasContent() {
           <div className="mb-6">
             {streamingPhase !== 'complete' && (
               <p className="h-6 text-lg font-medium text-white">
-                {(streamingPhase === 'analysis' || streamingPhase === 'brandguide_analysis') && animatedSubLabel
+                {(streamingPhase === 'analysis' || streamingPhase === 'brandguide_analysis' || streamingPhase === 'comparing') && animatedSubLabel
                   ? <>{animatedSubLabel}<span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" /></>
                   : displayedMessage
                     ? <>{displayedMessage}<span className="inline-block w-0.5 h-5 ml-0.5 bg-[#fff012] animate-pulse align-middle" /></>

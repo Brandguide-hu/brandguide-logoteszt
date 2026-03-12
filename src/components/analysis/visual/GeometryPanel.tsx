@@ -9,9 +9,10 @@ import { SilhouetteTest } from './SilhouetteTest';
 interface GeometryPanelProps {
   data: GeometryAnalysis;
   logoUrl: string;
+  isLight?: boolean;
 }
 
-export function GeometryPanel({ data, logoUrl }: GeometryPanelProps) {
+export function GeometryPanel({ data, logoUrl, isLight = false }: GeometryPanelProps) {
   return (
     <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6">
       <div className="mb-5 flex items-center gap-3">
@@ -22,20 +23,62 @@ export function GeometryPanel({ data, logoUrl }: GeometryPanelProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* BalanceOverlay — Light-ban is szabadon látható */}
         <BalanceOverlay
           balance={data.balance}
           logoUrl={logoUrl}
         />
-        <SymmetryHeatmap
-          symmetry={data.symmetry}
-        />
-        <ComplexityGauge
-          complexity={data.complexity}
-        />
-        <SilhouetteTest
-          silhouettePath={data.silhouette.silhouette_path}
-          logoUrl={logoUrl}
-        />
+
+        {/* Symmetry, Complexity, Silhouette — Light-ban blúrolva */}
+        {isLight ? (
+          <>
+            <div className="relative overflow-hidden rounded-xl">
+              <div className="blur-sm select-none pointer-events-none opacity-60">
+                <SymmetryHeatmap symmetry={data.symmetry} />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                <div className="flex flex-col items-center gap-1.5">
+                  <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                  <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                </div>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-xl">
+              <div className="blur-sm select-none pointer-events-none opacity-60">
+                <ComplexityGauge complexity={data.complexity} />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                <div className="flex flex-col items-center gap-1.5">
+                  <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                  <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                </div>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-xl">
+              <div className="blur-sm select-none pointer-events-none opacity-60">
+                <SilhouetteTest silhouettePath={data.silhouette.silhouette_path} logoUrl={logoUrl} />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                <div className="flex flex-col items-center gap-1.5">
+                  <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                  <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <SymmetryHeatmap symmetry={data.symmetry} />
+            <ComplexityGauge complexity={data.complexity} />
+            <SilhouetteTest silhouettePath={data.silhouette.silhouette_path} logoUrl={logoUrl} />
+          </>
+        )}
       </div>
     </div>
   );

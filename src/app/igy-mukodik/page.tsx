@@ -1,9 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { FeaturedAnalysesClient } from '@/components/landing/FeaturedAnalysesClient';
 import { TIER_INFO, CRITERIA_META, Tier } from '@/types';
 import { Target04, Zap, Grid01, Lightbulb05, Clock, Globe01, Eye, CheckCircle } from '@untitledui/icons';
 
@@ -38,9 +40,10 @@ const TIER_COMPARISON: { feature: string; free: boolean | string; paid: boolean 
   { feature: 'Fejlesztési javaslatok', free: false, paid: true, consultation: true },
   { feature: 'Színelemzés', free: false, paid: true, consultation: true },
   { feature: 'Tipográfia elemzés', free: false, paid: true, consultation: true },
+  { feature: 'Vizuális nyelv elemzés', free: false, paid: true, consultation: true },
+  { feature: 'Grafikai elemzés', free: false, paid: true, consultation: true },
   { feature: 'Erősségek / Fejlesztendő', free: false, paid: true, consultation: true },
   { feature: 'Megosztható link', free: false, paid: true, consultation: true },
-  { feature: 'PDF export', free: false, paid: false, consultation: true },
   { feature: 'Szakértői konzultáció', free: false, paid: false, consultation: '20 perc' },
 ];
 
@@ -55,8 +58,25 @@ const CRITERIA_DESCRIPTIONS: { key: string; icon: React.ReactNode; title: string
   { key: 'lathatosag', icon: <Eye className="w-7 h-7 text-gray-700" />, title: 'Láthatóság', description: 'Kontrasztos, jól olvasható' },
 ];
 
+interface FeaturedAnalysis {
+  id: string;
+  logo_name: string;
+  logo_url: string;
+  total_score: number;
+  category: string;
+  creator_name: string | null;
+}
+
 export default function IgyMukodikPage() {
   const router = useRouter();
+  const [featuredAnalyses, setFeaturedAnalyses] = useState<FeaturedAnalysis[]>([]);
+
+  useEffect(() => {
+    fetch('/api/featured-analyses?location=homepage')
+      .then(res => res.json())
+      .then(data => setFeaturedAnalyses(data.analyses || []))
+      .catch(() => {});
+  }, []);
 
   return (
     <AppLayout>
@@ -181,12 +201,14 @@ export default function IgyMukodikPage() {
                       <span className="text-2xl font-bold text-gray-900">{TIER_INFO.free.price}</span>
                     </td>
                     <td className="py-4 px-4 text-center bg-yellow-50">
+                      <span className="text-sm text-gray-400 line-through block">{TIER_INFO.paid.originalPrice}</span>
                       <span className="text-2xl font-bold text-gray-900">{TIER_INFO.paid.price}</span>
-                      <span className="text-sm text-gray-500 block">+ ÁFA</span>
+                      <span className="inline-block ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 align-middle">Early bird</span>
                     </td>
                     <td className="py-4 px-4 text-center">
+                      <span className="text-sm text-gray-400 line-through block">{TIER_INFO.consultation.originalPrice}</span>
                       <span className="text-2xl font-bold text-gray-900">{TIER_INFO.consultation.price}</span>
-                      <span className="text-sm text-gray-500 block">+ ÁFA</span>
+                      <span className="inline-block ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 align-middle">Early bird</span>
                     </td>
                   </tr>
                   {/* CTA sor */}
@@ -205,7 +227,7 @@ export default function IgyMukodikPage() {
                         onClick={() => router.push('/elemzes/uj?tier=paid')}
                         className="cursor-pointer px-5 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-black transition-colors text-sm font-medium"
                       >
-                        Megrendelem
+                        Ezt kérem
                       </button>
                     </td>
                     <td className="py-4 px-4 text-center">
@@ -213,7 +235,7 @@ export default function IgyMukodikPage() {
                         onClick={() => router.push('/elemzes/uj?tier=consultation')}
                         className="cursor-pointer px-5 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
                       >
-                        Megrendelem
+                        Ezt kérem
                       </button>
                     </td>
                   </tr>
@@ -223,33 +245,10 @@ export default function IgyMukodikPage() {
           </div>
         </section>
 
-        {/* 3. Minta elemzések szekció - placeholder amíg nincs featured_analyses */}
-        <section className="py-24 md:py-32">
-          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <span className="mb-4 inline-block text-xs font-medium uppercase tracking-widest text-gray-500">Példák</span>
-              <h2 className="text-3xl font-light text-gray-900 md:text-4xl mb-4">Minta elemzések</h2>
-              <p className="text-gray-500">Nézd meg, milyen elemzéseket készítettünk másoknak</p>
-            </div>
-
-            {/* Placeholder - később featured_analyses API-ból töltődik */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-2xl border border-gray-200 bg-white p-6 text-center opacity-50"
-                >
-                  <div className="w-16 h-16 bg-gray-100 rounded-lg mx-auto mb-3"></div>
-                  <div className="h-4 bg-gray-100 rounded w-3/4 mx-auto mb-2"></div>
-                  <div className="h-3 bg-gray-100 rounded w-1/2 mx-auto"></div>
-                </div>
-              ))}
-            </div>
-            <p className="text-center text-gray-400 mt-8 text-sm">
-              A minta elemzések hamarosan elérhetők lesznek.
-            </p>
-          </div>
-        </section>
+        {/* 3. Minta elemzések — ugyanaz a 3, mint a nyitólapon */}
+        {featuredAnalyses.length > 0 && (
+          <FeaturedAnalysesClient analyses={featuredAnalyses} />
+        )}
 
         {/* 4. Serfőző Péter & Brandguide szekció */}
         <section className="py-24 md:py-32 bg-white">
@@ -273,7 +272,8 @@ export default function IgyMukodikPage() {
                   <div className="font-bold text-gray-900">Serfőző Péter</div>
                   <div className="text-gray-500 text-sm mb-4">Brand stratéga, a Brandguide alapítója</div>
                   <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Brandguide könyv szerzője</li>
+                    <li>• Brandguide könyvek szerzője</li>
+                    <li>• <a href="https://ai.brandguide.hu" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-900 transition-colors">brandguide/Ai</a> alapítója</li>
                     <li>• 200+ branding projekt</li>
                     <li>• Oktató és előadó</li>
                   </ul>

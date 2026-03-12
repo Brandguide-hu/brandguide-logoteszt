@@ -55,8 +55,18 @@ export function TierSelector({ selectedTier, onSelect, canUseFree, isLoggedIn }:
               )}
 
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-gray-900">{info.label}</span>
-                <span className="text-sm font-medium text-gray-600">{info.price}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-900">{info.label}</span>
+                  {info.isEarlyBird && (
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700">Early bird</span>
+                  )}
+                </div>
+                <div className="text-right">
+                  {info.originalPrice && (
+                    <span className="text-xs text-gray-400 line-through mr-2">{info.originalPrice}</span>
+                  )}
+                  <span className="text-sm font-medium text-gray-600">{info.price}</span>
+                </div>
               </div>
 
               {/* Coming soon message */}

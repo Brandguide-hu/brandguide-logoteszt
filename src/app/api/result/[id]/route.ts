@@ -10,7 +10,7 @@ export async function GET(
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('analyses')
-      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier, visual_analysis, brief')
+      .select('id, created_at, test_level, result, logo_base64, status, logo_original_path, logo_thumbnail_path, logo_name, creator_name, category, tier, visual_analysis, brief, user_id')
       .eq('id', id)
       .single();
 
@@ -52,6 +52,7 @@ export async function GET(
       tier: data.tier,
       visual_analysis: data.visual_analysis,
       brief: data.brief,
+      user_id: data.user_id,
       top_percent: topPercent,
       result_url: `https://logolab.hu/eredmeny/${data.id}`,
     }, {

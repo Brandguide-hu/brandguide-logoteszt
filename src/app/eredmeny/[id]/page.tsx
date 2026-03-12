@@ -57,6 +57,8 @@ export default function ResultPage() {
     const scoreAnimated = useRef(false);
     const heroLogoRef = useRef<HTMLDivElement>(null);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [isOwner, setIsOwner] = useState(false);
+    const [analysisUserId, setAnalysisUserId] = useState<string | null>(null);
     const [logoName, setLogoName] = useState<string | null>(null);
     const [creatorName, setCreatorName] = useState<string | null>(null);
     const [category, setCategory] = useState<string | null>(null);
@@ -66,13 +68,16 @@ export default function ResultPage() {
     const [visualAnalysis, setVisualAnalysis] = useState<VisualAnalysis | null>(null);
     const [topPercent, setTopPercent] = useState<number | null>(null);
 
-    // Check auth state for breadcrumb
+    // Check auth state + ownership
     useEffect(() => {
         const supabase = getSupabaseBrowserClient();
         supabase.auth.getSession().then(({ data: { session } }) => {
             setIsLoggedIn(!!session);
+            if (session?.user?.id && analysisUserId) {
+                setIsOwner(session.user.id === analysisUserId);
+            }
         });
-    }, []);
+    }, [analysisUserId]);
 
     // Animated count-up for score
     const animateScore = useCallback((target: number) => {
@@ -133,6 +138,7 @@ export default function ResultPage() {
                 setCreatedAt(data.created_at || null);
                 setTestLevel(data.test_level || null);
                 setTopPercent(data.top_percent ?? null);
+                setAnalysisUserId(data.user_id || null);
                 if (data.visual_analysis) {
                     setVisualAnalysis(data.visual_analysis as VisualAnalysis);
                 }
@@ -262,25 +268,36 @@ export default function ResultPage() {
     // Light tier: blurozott szekciók
     const isLight = testLevel === 'basic';
 
-    // BlurredSection helper: blur + upgrade CTA overlay (gombbal)
+    // BlurredSection helper: blur + upgrade CTA overlay (gomb csak tulajdonosnak)
     const BlurredSection = ({ children }: { children: React.ReactNode }) => (
         <div className="relative mb-6">
             <div className="blur-sm select-none pointer-events-none opacity-60">{children}</div>
             <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/75">
                 <div className="text-center px-6 py-4">
-                    <p className="text-sm text-gray-500 mb-3">Ez a szekció a MAX elemzésben érhető el</p>
-                    <button
-                        onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
-                        className="px-5 py-2.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
-                    >
-                        Teljes elemzés feloldása — 1 990 Ft + ÁFA
-                    </button>
+                    {isOwner ? (
+                        <>
+                            <p className="text-sm text-gray-500 mb-3">Ez a szekció a MAX elemzésben érhető el</p>
+                            <button
+                                onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
+                                className="px-5 py-2.5 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                            >
+                                Teljes elemzés feloldása — 1 990 Ft + ÁFA
+                            </button>
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center gap-1.5">
+                            <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                            <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 
-    // LockedSection helper: blur + lakat ikon overlay (gomb nélkül, kisebb blokkokhoz)
+    // LockedSection helper: blur + lakat ikon overlay (kisebb blokkokhoz)
     const LockedSection = ({ children, className }: { children: React.ReactNode; className?: string }) => (
         <div className={`relative ${className || ''}`}>
             <div className="blur-sm select-none pointer-events-none opacity-50">{children}</div>
@@ -523,9 +540,9 @@ export default function ResultPage() {
                             <RadarChart result={result} />
                         </div>
 
-                        {/* Geometria elemzés — csak MAX/Ultra, ha van vizuális adat */}
-                        {visualAnalysis && !isLight && (
-                            <GeometryPanel data={visualAnalysis.geometry} logoUrl={logoUrl || ''} />
+                        {/* Geometria elemzés — ha van vizuális adat (Light-ban részben blúrolva) */}
+                        {visualAnalysis && (
+                            <GeometryPanel data={visualAnalysis.geometry} logoUrl={logoUrl || ''} isLight={isLight} />
                         )}
 
                         {/* Criteria Details - Tabbed layout */}
@@ -539,6 +556,7 @@ export default function ResultPage() {
                                 szempontok={result.szempontok}
                                 isLight={isLight}
                                 analysisId={id}
+                                isOwner={isOwner}
                             />
 
                             <div className="hidden sm:flex gap-4">
@@ -632,13 +650,24 @@ export default function ResultPage() {
                                                         </div>
                                                         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
                                                             <div className="text-center px-4 py-3">
-                                                                <p className="text-xs text-gray-500 mb-2">Részletes indoklás és javaslatok csak MAX csomagban</p>
-                                                                <button
-                                                                    onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
-                                                                    className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                                                                >
-                                                                    Feloldás — 1 990 Ft + ÁFA
-                                                                </button>
+                                                                {isOwner ? (
+                                                                    <>
+                                                                        <p className="text-xs text-gray-500 mb-2">Részletes indoklás és javaslatok csak MAX csomagban</p>
+                                                                        <button
+                                                                            onClick={() => router.push(`/elemzes/uj?upgradeFrom=${id}`)}
+                                                                            className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                                                                        >
+                                                                            Feloldás — 1 990 Ft + ÁFA
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-center gap-1.5">
+                                                                        <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                                                        </svg>
+                                                                        <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -677,67 +706,81 @@ export default function ResultPage() {
 
                         {/* Color, Typography Analysis - Two column grid */}
                         {isLight ? (
-                            /* Light: blurozott szín/tipográfia/vizuális placeholder magyar dummy szöveggel */
-                            <BlurredSection>
+                            /* Light: blurozott szín/tipográfia/vizuális — címek kívül, tartalom blúrolva */
+                            <>
                                 <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                                    {/* Színpaletta — cím látható, tartalom blúrolva */}
                                     <div className="rounded-2xl border border-gray-100 bg-white p-6">
                                         <div className="mb-5 flex items-center gap-3">
                                             <Palette className="size-5 text-purple-600" />
                                             <h3 className="text-xl font-light text-gray-900">Színpaletta elemzés</h3>
                                         </div>
-                                        <div className="space-y-5">
-                                            <div>
-                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
-                                                <p className="text-sm leading-relaxed text-gray-500">A logó színvilága harmonikus egyensúlyt teremt az egyes elemek között, kellemes vizuális benyomást keltve. A választott árnyalatok erősítik egymást.</p>
+                                        <LockedSection>
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Harmónia</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">A logó színvilága harmonikus egyensúlyt teremt az egyes elemek között, kellemes vizuális benyomást keltve.</p>
+                                                </div>
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">A felhasznált színek a célcsoport érzelmi reakcióira is hatással vannak, megbízhatóságot sugároznak.</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-purple-600">Pszichológia</h4>
-                                                <p className="text-sm leading-relaxed text-gray-500">A felhasznált színek a célcsoport érzelmi reakcióira is hatással vannak, megbízhatóságot és professzionalizmust sugároznak a befogadó felé.</p>
-                                            </div>
-                                            <div>
-                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-emerald-600">Technikai</h4>
-                                                <p className="text-sm leading-relaxed text-gray-500">A színek nyomtatásban és digitális felületeken egyaránt jól reprodukálhatók, megfelelnek a technikai követelményeknek.</p>
-                                            </div>
-                                        </div>
+                                        </LockedSection>
                                     </div>
+                                    {/* Tipográfia — cím látható, tartalom blúrolva */}
                                     <div className="rounded-2xl border border-gray-100 bg-white p-6">
                                         <div className="mb-5 flex items-center gap-3">
                                             <TypeSquare className="size-5 text-blue-600" />
                                             <h3 className="text-xl font-light text-gray-900">Tipográfia elemzés</h3>
                                         </div>
-                                        <div className="space-y-5">
-                                            <div>
-                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
-                                                <p className="text-sm leading-relaxed text-gray-500">A betűtípus karaktere jól illeszkedik a brand személyiségéhez, erősíti az üzenetet és hatékonyan kommunikál a célcsoport felé.</p>
+                                        <LockedSection>
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Karakter</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">A betűtípus karaktere jól illeszkedik a brand személyiségéhez, erősíti az üzenetet.</p>
+                                                </div>
+                                                <div>
+                                                    <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
+                                                    <p className="text-sm leading-relaxed text-gray-500">A tipográfia különböző méretekben is megfelelő olvashatóságot biztosít.</p>
+                                                </div>
                                             </div>
-                                            <div className="border-t border-gray-100 pt-5">
-                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-blue-600">Olvashatóság</h4>
-                                                <p className="text-sm leading-relaxed text-gray-500">A tipográfia különböző méretekben is megfelelő olvashatóságot biztosít, a betűköz és -súly megfelelően van beállítva.</p>
-                                            </div>
-                                        </div>
+                                        </LockedSection>
                                     </div>
                                 </div>
+                                {/* Vizuális nyelv — cím látható, tartalom blúrolva */}
                                 <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-6">
                                     <div className="mb-5 flex items-center gap-3">
                                         <LayersThree01 className="size-5 text-teal-600" />
                                         <h3 className="text-xl font-light text-gray-900">Vizuális nyelv elemzés</h3>
                                     </div>
-                                    <div className="grid gap-4 sm:grid-cols-3">
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">A geometriai formák tudatos alkalmazása erőt és stabilitást sugároz, jól illeszkedik a brand értékeihez.</p>
+                                    <LockedSection>
+                                        <div className="grid gap-4 sm:grid-cols-3">
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Formák</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A geometriai formák tudatos alkalmazása erőt és stabilitást sugároz.</p>
+                                            </div>
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">A grafikai elemek jól strukturáltak, a kompozíció átgondolt megjelenést biztosít.</p>
+                                            </div>
+                                            <div>
+                                                <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
+                                                <p className="text-sm leading-relaxed text-gray-500">Az összes vizuális elem egységes stílust alkot, koherens benyomást kelt.</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Elemek</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">A grafikai elemek jól strukturáltak, a kompozíció átgondolt és kiegyensúlyozott megjelenést biztosít.</p>
-                                        </div>
-                                        <div>
-                                            <h4 className="mb-2 text-xs font-medium uppercase tracking-widest text-teal-600">Stílusegység</h4>
-                                            <p className="text-sm leading-relaxed text-gray-500">Az összes vizuális elem egységes stílust alkot, koherens benyomást kelt és jól adaptálható különböző kontextusokban.</p>
-                                        </div>
-                                    </div>
+                                    </LockedSection>
                                 </div>
-                            </BlurredSection>
+
+                                {/* Szín vizualizációk — Light: blúrolva */}
+                                {visualAnalysis && (
+                                    <div className="mb-6">
+                                        <LockedSection>
+                                            <ColorVisualization data={visualAnalysis.colors} logoUrl={logoUrl || ''} />
+                                        </LockedSection>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <>
                                 <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -844,8 +887,8 @@ export default function ResultPage() {
                         )}
 
                         {/* CTA */}
-                        {isLight ? (
-                            /* Light: Upgrade CTA */
+                        {isLight && isOwner ? (
+                            /* Light + Tulajdonos: Upgrade CTA */
                             <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
                                 <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
                                     MAX elemzés
@@ -861,6 +904,28 @@ export default function ResultPage() {
                                     className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg cursor-pointer"
                                 >
                                     Teljes elemzés feloldása — 1 990 Ft + ÁFA
+                                    <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ) : isLight && !isOwner ? (
+                            /* Light + Látogató: CTA saját logó elemzésre */
+                            <div className="rounded-2xl bg-gray-900 p-8 text-center sm:p-10">
+                                <span className="mb-4 inline-block rounded-full bg-[#fff012] px-4 py-1.5 text-xs font-bold text-gray-900">
+                                    LogoLab
+                                </span>
+                                <h2 className="mb-3 text-2xl font-light text-white sm:text-3xl">
+                                    Teszteld te is a logódat!
+                                </h2>
+                                <p className="mx-auto mb-8 max-w-xl text-gray-400">
+                                    Töltsd fel a logódat és kapj szakmai visszajelzést — ingyenesen, másodpercek alatt.
+                                </p>
+                                <button
+                                    onClick={() => router.push('/elemzes/uj')}
+                                    className="group inline-flex items-center gap-3 rounded-full bg-[#fff012] px-8 py-4 font-semibold text-gray-900 transition-all hover:brightness-95 hover:shadow-lg cursor-pointer"
+                                >
+                                    Logó elemzés indítása
                                     <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                     </svg>

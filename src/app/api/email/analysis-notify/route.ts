@@ -11,7 +11,7 @@ import {
 
 export const runtime = 'nodejs';
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'teamai@brandguide.hu';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
@@ -102,14 +102,19 @@ export async function POST(req: NextRequest) {
         emailResults.push(`user-complete: ${result.success ? 'OK' : result.error}`);
       }
 
-      // 2. Admin email: adminAnalysisCompleteEmail
+      // 2. Admin email: adminAnalysisCompleteEmail (with tier + timing)
       {
+        const timing = (analysis.result?._timing || {}) as { scoring?: string; summary?: string };
+        const tierLabel = tier === 'free' ? 'Light' : tier === 'paid' ? 'Max' : tier === 'consultation' ? 'Ultra' : tier;
+
         const { subject, html } = adminAnalysisCompleteEmail({
           userName,
           userEmail: userEmail || 'ismeretlen',
           logoName,
           score,
           analysisId,
+          tier: tierLabel,
+          timing,
         });
         const result = await sendEmail({ to: ADMIN_EMAIL, subject, html });
         emailResults.push(`admin-complete: ${result.success ? 'OK' : result.error}`);

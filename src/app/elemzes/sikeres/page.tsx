@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/providers/auth-provider';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { pushToDataLayer } from '@/lib/gtm';
 
 function SikeresContent() {
   const searchParams = useSearchParams();
@@ -27,6 +28,16 @@ function SikeresContent() {
           if (data.email) setEmail(data.email);
           if (data.pendingAnalysisId) setAnalysisId(data.pendingAnalysisId);
           if (data.magicLinkToken) setMagicLinkToken(data.magicLinkToken);
+
+          // GTM purchase conversion event
+          if (data.status === 'paid' && data.amountTotal) {
+            pushToDataLayer('purchase', {
+              transaction_id: sessionId,
+              tier: data.tier,
+              value: data.amountTotal / 100, // fillér → HUF
+              currency: (data.currency || 'huf').toUpperCase(),
+            });
+          }
         })
         .catch(() => {});
     }

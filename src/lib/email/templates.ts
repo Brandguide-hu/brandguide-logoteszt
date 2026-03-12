@@ -354,8 +354,20 @@ export function adminAnalysisCompleteEmail(params: {
   logoName: string;
   score: number;
   analysisId: string;
+  tier?: string;
+  timing?: { scoring?: string; summary?: string };
 }) {
   const subject = `Elemzés kész: ${params.logoName} (${params.score}/100) – LogoLab`;
+
+  // Timing sor összeállítása
+  let timingHtml = '';
+  if (params.timing && (params.timing.scoring || params.timing.summary)) {
+    const parts: string[] = [];
+    if (params.timing.scoring) parts.push(`scoring ${params.timing.scoring}s`);
+    if (params.timing.summary) parts.push(`summary ${params.timing.summary}s`);
+    timingHtml = `<p style="margin:8px 0 0"><strong>Időzítés:</strong> ${parts.join(' | ')}</p>`;
+  }
+
   const html = layout(`
     <p><strong>Egy elemzés elkészült!</strong></p>
     <div class="highlight">
@@ -363,6 +375,8 @@ export function adminAnalysisCompleteEmail(params: {
       <p style="margin:8px 0 0"><strong>Email:</strong> ${params.userEmail}</p>
       <p style="margin:8px 0 0"><strong>Logó:</strong> ${params.logoName}</p>
       <p style="margin:8px 0 0"><strong>Összpontszám:</strong> ${params.score}/100</p>
+      ${params.tier ? `<p style="margin:8px 0 0"><strong>Csomag:</strong> ${params.tier}</p>` : ''}
+      ${timingHtml}
     </div>
     <p style="text-align:center;margin-top:24px;">
       <a href="${APP_URL}/eredmeny/${params.analysisId}" class="btn" style="${BTN_STYLE}">Eredmény megtekintése</a>

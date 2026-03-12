@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail } from '@/lib/email/send';
 import { paymentSuccessWithMagicLinkEmail, paymentSuccessEmail, adminPaymentSuccessEmail, adminPaymentFailedEmail } from '@/lib/email/templates';
+import { createOrFindPartner, createDraftInvoice } from '@/lib/billingo';
 import { TIER_INFO } from '@/types';
 import Stripe from 'stripe';
 import crypto from 'crypto';
@@ -238,7 +239,7 @@ export async function POST(req: NextRequest) {
 
       // 8. Admin értesítő email — sikeres fizetés
       try {
-        const adminEmailAddr = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+        const adminEmailAddr = process.env.ADMIN_EMAIL || 'teamai@brandguide.hu';
         const { subject: adminSubject, html: adminHtml } = adminPaymentSuccessEmail({
           userEmail: customerEmail,
           userName: pending.creator_name || 'Ismeretlen',
@@ -252,7 +253,77 @@ export async function POST(req: NextRequest) {
         // Non-critical
       }
 
-      // 9. Cleanup temp
+      // 9. Billingo számla létrehozás (fire-and-forget)
+      try {
+        const billingoProductId = tier === 'consultation'
+          ? process.env.BILLINGO_PRODUCT_ID_ULTRA
+          : process.env.BILLINGO_PRODUCT_ID_MAX;
+
+        if (billingoProductId && process.env.BILLINGO_API_KEY) {
+          // Billingo mód kiolvasása: draft vagy végleges
+          const { data: billingoSetting } = await admin
+            .from('site_settings')
+            .select('value')
+            .eq('key', 'billingo_draft_mode')
+            .single() as { data: { value: string } | null };
+          const billingoDraftMode = billingoSetting?.value !== 'false'; // default: draft
+
+          // Stripe custom fields kiolvasása (adószám, cégnév)
+          const customFields = session.custom_fields || [];
+          const taxId = customFields.find(f => f.key === 'tax_id')?.text?.value || '';
+          const companyName = customFields.find(f => f.key === 'company_name')?.text?.value || '';
+
+          // Stripe billing address kiolvasása
+          const billingAddress = session.customer_details?.address;
+
+          const partnerId = await createOrFindPartner(
+            customerEmail,
+            companyName || session.customer_details?.name || pending.creator_name,
+            billingAddress?.country,
+            {
+              postCode: billingAddress?.postal_code || undefined,
+              city: billingAddress?.city || undefined,
+              address: [billingAddress?.line1, billingAddress?.line2].filter(Boolean).join(', ') || undefined,
+              taxCode: taxId || undefined,
+            }
+          );
+          const docId = await createDraftInvoice(
+            partnerId,
+            parseInt(billingoProductId),
+            (session.currency || 'huf').toUpperCase(),
+            session.payment_intent as string,
+            billingoDraftMode
+          );
+
+          // Track in DB
+          await (admin.from('billingo_invoices') as any).insert({
+            stripe_payment_intent_id: session.payment_intent,
+            stripe_checkout_session_id: session.id,
+            billingo_document_id: docId,
+            billingo_partner_id: partnerId,
+            amount_total: session.amount_total,
+            currency: (session.currency || 'huf').toUpperCase(),
+            customer_email: customerEmail,
+            customer_name: session.customer_details?.name,
+            status: 'created',
+          });
+
+          console.log(`[WEBHOOK] Billingo draft created: doc=${docId}, partner=${partnerId}`);
+        }
+      } catch (billingoErr) {
+        console.error('[WEBHOOK] Billingo error (non-fatal):', billingoErr);
+        // Track failed attempt — ne faileljük a webhookot
+        await (admin.from('billingo_invoices') as any).insert({
+          stripe_payment_intent_id: session.payment_intent as string,
+          stripe_checkout_session_id: session.id,
+          amount_total: session.amount_total,
+          customer_email: customerEmail,
+          status: 'failed',
+          error_message: billingoErr instanceof Error ? billingoErr.message : String(billingoErr),
+        }).catch(() => {});
+      }
+
+      // 10. Cleanup temp
       await (admin.from('pending_analyses') as any).delete().eq('id', pending_analysis_id);
       await admin.storage.from('logos-temp').remove([
         pending.logo_temp_path,
@@ -274,7 +345,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const tierInfo = tier ? TIER_INFO[tier as keyof typeof TIER_INFO] : null;
-      const adminEmailAddr = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+      const adminEmailAddr = process.env.ADMIN_EMAIL || 'teamai@brandguide.hu';
       const { subject, html } = adminPaymentFailedEmail({
         userEmail: customerEmail,
         tierName: tierInfo?.label || tier || 'ismeretlen',

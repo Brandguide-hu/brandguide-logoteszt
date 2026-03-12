@@ -5,7 +5,7 @@ import { createHash } from 'crypto';
 export const runtime = 'nodejs';
 
 // ⚠️ TESZTELÉSI FLAG: true = limit kikapcsolva, false = normál működés
-const DISABLE_FREE_LIMIT = true;
+const DISABLE_FREE_LIMIT = false;
 
 /**
  * GET /api/user/can-free-analysis
@@ -39,12 +39,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (userId) {
-      // BEJELENTKEZETT USER: IP ÉS email check
+      // BEJELENTKEZETT USER: IP ÉS email check + admin bypass
       const { data: profile } = await (admin
         .from('profiles') as any)
-        .select('last_free_analysis_at, last_free_analysis_ip')
+        .select('last_free_analysis_at, last_free_analysis_ip, is_admin')
         .eq('id', userId)
         .single();
+
+      // Admin felhasználók mentesek a 24 órás limitől
+      if (profile?.is_admin) {
+        return NextResponse.json({ canUse: true });
+      }
 
       if (!profile?.last_free_analysis_at) {
         return NextResponse.json({ canUse: true });

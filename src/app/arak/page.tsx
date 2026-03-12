@@ -40,20 +40,19 @@ const DETAILED_FEATURES: Record<Tier, { included: string[]; excluded: string[] }
       'Színpaletta elemzés',
       'Tipográfia elemzés',
       'Vizuális nyelv elemzés',
+      'Grafikai elemzés (szimmetria, egyensúly, komplexitás)',
       'Erősségek / Fejlesztendő lista',
       'Megosztható link',
       'Privát (opcionálisan publikálható)',
       'Brief / megjegyzés – kontextus az AI-nak',
     ],
     excluded: [
-      'PDF export',
       'Szakértői konzultáció',
     ],
   },
   consultation: {
     included: [
       'Minden a Max csomagból',
-      'PDF export',
       '20 perces szakértői konzultáció',
       'Prioritásos feldolgozás',
     ],
@@ -102,8 +101,18 @@ export default function ArakPage() {
                   )}
 
                   <div className="mb-6">
-                    <h3 className="text-lg font-bold text-gray-900">{info.label}</h3>
-                    <div className="mt-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-gray-900">{info.label}</h3>
+                      {info.isEarlyBird && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Early bird</span>
+                      )}
+                    </div>
+                    {info.originalPrice && (
+                      <div className="mt-2">
+                        <span className="text-base text-gray-400 line-through">{info.originalPrice}</span>
+                      </div>
+                    )}
+                    <div className={info.originalPrice ? 'mt-0.5' : 'mt-2'}>
                       <span className="text-3xl font-bold text-gray-900">
                         {key === 'free' ? '0' : key === 'paid' ? '1 990' : '24 990'}
                       </span>
@@ -153,7 +162,7 @@ export default function ArakPage() {
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                     }`}
                   >
-                    {key === 'free' ? 'Light — hamarosan' : key === 'paid' ? 'Max csomag' : 'Ultra csomag'}
+                    {key === 'free' ? 'Kipróbálom' : 'Ezt kérem'}
                   </button>
                 </div>
               );

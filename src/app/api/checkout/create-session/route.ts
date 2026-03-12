@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, getHungarianVatRateId } from '@/lib/stripe';
 import { Tier, TIER_INFO } from '@/types';
 
 export const runtime = 'nodejs';
@@ -32,11 +32,31 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 
+    // 27%-os ÁFA tax rate lekérése/létrehozása — a Checkout megjeleníti a nettó/ÁFA/bruttó bontást
+    const vatRateId = await getHungarianVatRateId();
+
     const session = await getStripe().checkout.sessions.create({
-      payment_method_types: ['card'],
+      // payment_method_types nincs megadva — Stripe Dashboard beállítások alapján
+      // automatikusan megjelenik: kártya, Apple Pay, Google Pay, stb.
       mode: 'payment',
       locale: 'hu',
       customer_email: email,
+      allow_promotion_codes: true,                    // Kupon/promóciós kód mező megjelenítése
+      billing_address_collection: 'required',       // Számlázási cím bekérése
+      custom_fields: [
+        {
+          key: 'tax_id',
+          label: { type: 'custom', custom: 'Adószám (opcionális, cégek számára)' },
+          type: 'text',
+          optional: true,
+        },
+        {
+          key: 'company_name',
+          label: { type: 'custom', custom: 'Cégnév (opcionális)' },
+          type: 'text',
+          optional: true,
+        },
+      ],
       line_items: [
         {
           price_data: {
@@ -50,8 +70,10 @@ export async function POST(req: NextRequest) {
                 : 'Részletes logó elemzés + 20 perces szakértői konzultáció',
             },
             unit_amount: tierInfo.priceBrutto * 100, // HUF fillérben (Stripe 2022+ óta a HUF two-decimal)
+            tax_behavior: 'inclusive' as const,      // Az ár tartalmazza az ÁFÁ-t (bruttó) — Stripe megjeleníti a bontást
           },
           quantity: 1,
+          tax_rates: [vatRateId],                    // 27% magyar ÁFA — nettó/adó/bruttó bontás megjelenítése
         },
       ],
       metadata: {

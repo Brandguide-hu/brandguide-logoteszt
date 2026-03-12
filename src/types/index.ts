@@ -74,11 +74,22 @@ export const MOCKUP_CATEGORIES: { id: MockupCategory; label: string }[] = [
   { id: 'universal',         label: 'Általános / Egyéb' },
 ];
 
-export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto: number; features: string[] }> = {
+export interface TierInfoItem {
+  label: string;
+  price: string;
+  priceBrutto: number;
+  originalPrice?: string;       // Áthúzott (eredeti) ár szövege
+  originalPriceBrutto?: number;  // Áthúzott bruttó ár
+  isEarlyBird: boolean;         // Early bird badge megjelenítése
+  features: string[];
+}
+
+export const TIER_INFO: Record<Tier, TierInfoItem> = {
   free: {
     label: 'Light',
     price: '0 Ft',
     priceBrutto: 0,
+    isEarlyBird: false,
     features: [
       'Összpontszám',
       '7 szempont pontszám',
@@ -90,10 +101,14 @@ export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto
     label: 'Max',
     price: '1 990 Ft + ÁFA',
     priceBrutto: 2527,
+    originalPrice: '3 990 Ft + ÁFA',
+    originalPriceBrutto: 5068,
+    isEarlyBird: true,
     features: [
       'Összpontszám + 7 szempont',
       'Szöveges indoklás + javaslatok',
       'Szín, tipográfia, vizuális nyelv elemzés',
+      'Grafikai elemzés (szimmetria, egyensúly)',
       'Erősségek / Fejlesztendő',
       'Brief / megjegyzés az AI-nak',
       'Megosztható link',
@@ -104,9 +119,11 @@ export const TIER_INFO: Record<Tier, { label: string; price: string; priceBrutto
     label: 'Ultra',
     price: '24 990 Ft + ÁFA',
     priceBrutto: 31737,
+    originalPrice: '34 990 Ft + ÁFA',
+    originalPriceBrutto: 44437,
+    isEarlyBird: true,
     features: [
       'Minden a Max csomagból',
-      'PDF export',
       '20 perces szakértői konzultáció',
     ],
   },

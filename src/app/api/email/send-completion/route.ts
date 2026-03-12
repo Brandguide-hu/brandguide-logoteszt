@@ -10,7 +10,7 @@ import {
 
 export const runtime = 'nodejs';
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'peti@brandguide.hu';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'teamai@brandguide.hu';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://logolab.hu';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 

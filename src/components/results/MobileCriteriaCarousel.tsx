@@ -53,9 +53,10 @@ interface MobileCriteriaCarouselProps {
     szempontok: Record<CriteriaName, CriteriaScore>;
     isLight: boolean;
     analysisId: string;
+    isOwner?: boolean;
 }
 
-export function MobileCriteriaCarousel({ szempontok, isLight, analysisId }: MobileCriteriaCarouselProps) {
+export function MobileCriteriaCarousel({ szempontok, isLight, analysisId, isOwner = false }: MobileCriteriaCarouselProps) {
     const router = useRouter();
     const containerRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -161,13 +162,24 @@ export function MobileCriteriaCarousel({ szempontok, isLight, analysisId }: Mobi
                                         </div>
                                         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
                                             <div className="text-center px-4 py-3">
-                                                <p className="text-xs text-gray-500 mb-2">Részletes indoklás és javaslatok csak MAX csomagban</p>
-                                                <button
-                                                    onClick={() => router.push(`/elemzes/uj?upgradeFrom=${analysisId}`)}
-                                                    className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                                                >
-                                                    Feloldás — 1 990 Ft + ÁFA
-                                                </button>
+                                                {isOwner ? (
+                                                    <>
+                                                        <p className="text-xs text-gray-500 mb-2">Részletes indoklás és javaslatok csak MAX csomagban</p>
+                                                        <button
+                                                            onClick={() => router.push(`/elemzes/uj?upgradeFrom=${analysisId}`)}
+                                                            className="px-4 py-2 bg-[#FFF012] hover:bg-[#e6d810] text-gray-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                                                        >
+                                                            Feloldás — 1 990 Ft + ÁFA
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-1.5">
+                                                        <svg className="size-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                                        </svg>
+                                                        <span className="text-xs text-gray-400 font-medium">MAX csomag</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

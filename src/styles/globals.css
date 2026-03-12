@@ -65,6 +65,8 @@ body {
     font-variant-ligatures: contextual;
     -webkit-font-kerning: normal;
     font-kerning: normal;
+    font-variant-numeric: slashed-zero;
+    font-feature-settings: "zero" 1;
     overflow-x: clip;
 }
 

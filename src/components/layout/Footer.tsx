@@ -8,7 +8,7 @@ export function Footer() {
           {/* Brand */}
           <div className="md:col-span-1">
             <div className="mb-3">
-              <img src="/logolab-logo-newLL.svg" alt="LogoLab" className="h-8 brightness-0 invert" />
+              <img src="/logolab-logo-white.svg" alt="LogoLab" className="h-8" />
             </div>
             <p className="text-sm text-gray-500">
               by Brandguide
@@ -27,11 +27,6 @@ export function Footer() {
               <li>
                 <Link href="/arak" className="text-sm hover:text-white transition-colors">
                   Árak
-                </Link>
-              </li>
-              <li>
-                <Link href="/galeria" className="text-sm hover:text-white transition-colors">
-                  Logo galéria
                 </Link>
               </li>
               <li>

@@ -9,7 +9,6 @@ import { cx } from '@/utils/cx';
 const NAV_ITEMS = [
   { label: 'Így működik', href: '/igy-mukodik', authRequired: false },
   { label: 'Árak', href: '/arak', authRequired: false },
-  { label: 'Logó galéria', href: '/galeria', authRequired: false },
   { label: 'Dashboard', href: '/dashboard', authRequired: true },
 ];
 

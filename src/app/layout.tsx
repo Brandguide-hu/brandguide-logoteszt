@@ -4,7 +4,10 @@ import { RouteProvider } from "@/providers/router-provider";
 import { Theme } from "@/providers/theme";
 import { AuthProvider } from "@/providers/auth-provider";
 import { AuthModalProvider } from "@/providers/auth-modal-provider";
+import { CookieConsentProvider } from "@/providers/cookie-consent-provider";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { CookieConsentModal } from "@/components/shared/CookieConsentModal";
+import { GoogleTagManager, GoogleTagManagerNoscript } from "@/components/shared/GoogleTagManager";
 import "@/styles/globals.css";
 import { cx } from "@/utils/cx";
 
@@ -31,16 +34,23 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="hu" suppressHydrationWarning>
+            <head>
+                <GoogleTagManager />
+            </head>
             <body className={cx(inter.variable, "bg-secondary antialiased")}>
+                <GoogleTagManagerNoscript />
                 <RouteProvider>
-                    <Theme>
-                        <AuthProvider>
-                            <AuthModalProvider>
-                                {children}
-                                <AuthModal />
-                            </AuthModalProvider>
-                        </AuthProvider>
-                    </Theme>
+                    <CookieConsentProvider>
+                        <Theme>
+                            <AuthProvider>
+                                <AuthModalProvider>
+                                    {children}
+                                    <AuthModal />
+                                    <CookieConsentModal />
+                                </AuthModalProvider>
+                            </AuthProvider>
+                        </Theme>
+                    </CookieConsentProvider>
                 </RouteProvider>
             </body>
         </html>

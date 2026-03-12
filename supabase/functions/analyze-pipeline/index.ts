@@ -1,14 +1,22 @@
 /**
  * Supabase Edge Function: analyze-pipeline
  *
- * KB-Extract scoring/summary pipeline — nincs Netlify 60s limit!
+ * KB-Extract pipeline párhuzamos javaslatokkal — nincs Netlify 60s limit!
  * Supabase Edge Function timeout: Pro 150s, Team 400s.
  *
  * Lépések:
- *   step='scoring':  Scoring KB-Extract → partial result DB-be (status='processing')
- *   step='summary':  Summary KB-Extract → merge + status='completed'
+ *   step='scoring':            Scoring KB-Extract → partial result DB-be (status='processing')
+ *   step='summary':            Summary KB-Extract (osszegzes, erossegek, fejlesztendo) → status='processing'
+ *   step='details':            Details KB-Extract (szinek, tipografia, vizualisNyelv) → status='processing'
+ *   step='suggestions-a':      Javaslatok 4 szemponthoz (generate-only, NINCS DB write)
+ *   step='suggestions-b':      Javaslatok 3 szemponthoz (generate-only, NINCS DB write)
+ *   step='detail-suggestions': Részletes javaslatok (generate-only, NINCS DB write)
+ *   step='finalize':           Merge all + status='completed' + email
  *
- * A kliens szekvenciálisan hívja: vision (Next.js) → scoring → summary → redirect
+ * Kliens:
+ *   vision (Next.js) → scoring → summary → details
+ *     → Promise.all(suggestions-a, suggestions-b, detail-suggestions)
+ *     → finalize → redirect
  */
 
 // @ts-nocheck — Deno imports
@@ -74,6 +82,7 @@ interface SummaryDetailsDataRaw {
       javaslatok: string[];
     };
   };
+  szempontJavaslatok?: Record<string, string[]>;
 }
 
 type SzempontKey =
@@ -113,15 +122,15 @@ const MAX_VALUES: Record<SzempontKey, number> = {
 // SCHEMAS (from prompts-v2.ts)
 // ============================================================================
 
-const szempontItemSchema = {
+// Szempont schema (scoring step — pont, maxPont, indoklas, nincs javaslatok)
+const szempontItemScoringSchema = {
   type: "object",
   properties: {
     pont: { type: "integer" },
     maxPont: { type: "integer" },
     indoklas: { type: "string" },
-    javaslatok: { type: "array", items: { type: "string" } },
   },
-  required: ["pont", "maxPont", "indoklas", "javaslatok"],
+  required: ["pont", "maxPont", "indoklas"],
 };
 
 const KB_EXTRACT_SCORING_SCHEMA = {
@@ -148,13 +157,13 @@ const KB_EXTRACT_SCORING_SCHEMA = {
         szempontok: {
           type: "object",
           properties: {
-            megkulonboztethetoseg: szempontItemSchema,
-            egyszeruseg: szempontItemSchema,
-            alkalmazhatosag: szempontItemSchema,
-            emlekezetesseg: szempontItemSchema,
-            idotallosag: szempontItemSchema,
-            univerzalitas: szempontItemSchema,
-            lathatosag: szempontItemSchema,
+            megkulonboztethetoseg: szempontItemScoringSchema,
+            egyszeruseg: szempontItemScoringSchema,
+            alkalmazhatosag: szempontItemScoringSchema,
+            emlekezetesseg: szempontItemScoringSchema,
+            idotallosag: szempontItemScoringSchema,
+            univerzalitas: szempontItemScoringSchema,
+            lathatosag: szempontItemScoringSchema,
           },
           required: [
             "megkulonboztethetoseg",
@@ -173,7 +182,43 @@ const KB_EXTRACT_SCORING_SCHEMA = {
   required: ["scoring"],
 };
 
-const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
+// Suggestions-A schema: 4 szempont (megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg)
+const KB_EXTRACT_SUGGESTIONS_A_SCHEMA = {
+  type: "object",
+  properties: {
+    javaslatok: {
+      type: "object",
+      properties: {
+        megkulonboztethetoseg: { type: "array", items: { type: "string" } },
+        egyszeruseg: { type: "array", items: { type: "string" } },
+        alkalmazhatosag: { type: "array", items: { type: "string" } },
+        emlekezetesseg: { type: "array", items: { type: "string" } },
+      },
+      required: ["megkulonboztethetoseg", "egyszeruseg", "alkalmazhatosag", "emlekezetesseg"],
+    },
+  },
+  required: ["javaslatok"],
+};
+
+// Suggestions-B schema: 3 szempont (idotallosag, univerzalitas, lathatosag)
+const KB_EXTRACT_SUGGESTIONS_B_SCHEMA = {
+  type: "object",
+  properties: {
+    javaslatok: {
+      type: "object",
+      properties: {
+        idotallosag: { type: "array", items: { type: "string" } },
+        univerzalitas: { type: "array", items: { type: "string" } },
+        lathatosag: { type: "array", items: { type: "string" } },
+      },
+      required: ["idotallosag", "univerzalitas", "lathatosag"],
+    },
+  },
+  required: ["javaslatok"],
+};
+
+// Summary schema — CSAK összefoglaló (könnyű, gyors)
+const KB_EXTRACT_SUMMARY_SCHEMA = {
   type: "object",
   properties: {
     summary: {
@@ -185,6 +230,15 @@ const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
       },
       required: ["osszegzes", "erossegek", "fejlesztendo"],
     },
+  },
+  required: ["summary"],
+};
+
+// Details schema — részletes elemzés (színek, tipográfia, vizuális nyelv)
+// NINCS javaslatok — azok a suggestions stepben generálódnak
+const KB_EXTRACT_DETAILS_SCHEMA = {
+  type: "object",
+  properties: {
     details: {
       type: "object",
       properties: {
@@ -194,18 +248,16 @@ const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
             harmonia: { type: "string" },
             pszichologia: { type: "string" },
             technikai: { type: "string" },
-            javaslatok: { type: "array", items: { type: "string" } },
           },
-          required: ["harmonia", "pszichologia", "technikai", "javaslatok"],
+          required: ["harmonia", "pszichologia", "technikai"],
         },
         tipografia: {
           type: "object",
           properties: {
             karakter: { type: "string" },
             olvashatosag: { type: "string" },
-            javaslatok: { type: "array", items: { type: "string" } },
           },
-          required: ["karakter", "olvashatosag", "javaslatok"],
+          required: ["karakter", "olvashatosag"],
         },
         vizualisNyelv: {
           type: "object",
@@ -213,15 +265,14 @@ const KB_EXTRACT_SUMMARY_DETAILS_SCHEMA = {
             formak: { type: "string" },
             elemek: { type: "string" },
             stilusEgyseg: { type: "string" },
-            javaslatok: { type: "array", items: { type: "string" } },
           },
-          required: ["formak", "elemek", "stilusEgyseg", "javaslatok"],
+          required: ["formak", "elemek", "stilusEgyseg"],
         },
       },
       required: ["szinek", "tipografia", "vizualisNyelv"],
     },
   },
-  required: ["summary", "details"],
+  required: ["details"],
 };
 
 // ============================================================================
@@ -388,11 +439,26 @@ LEVONÁSOK: Gradiens = MAX 11, 4+ szín = MAX 9, Körbeírt szöveg + komplex k�
 [Feladat]
 A logó leírása az image_description mezőben található. Értékeld a Brandguide 100 pontos rendszerével!
 
-KRITIKUS: A szempontok tömbben MIND A 7 szempont KÖTELEZŐ! Ne hagyd ki egyiket sem: megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag.`;
+KRITIKUS: A szempontok tömbben MIND A 7 szempont KÖTELEZŐ! Ne hagyd ki egyiket sem: megkulonboztethetoseg, egyszeruseg, alkalmazhatosag, emlekezetesseg, idotallosag, univerzalitas, lathatosag.
+
+FONTOS: Ebben a lépésben CSAK a pontozás (pont, maxPont) és az indoklás (indoklas) szükséges szempontonként. Javaslatokat (javaslatok) NE generálj – azok a következő lépésben készülnek.`;
 }
 
-function buildSummaryDetailsExtractQuery(): string {
-  return `${PETI_STYLE_BLOCK}
+function buildSummaryExtractQuery(scoringJson: Record<string, unknown>): string {
+  return `## ELŐZŐ ELEMZÉS EREDMÉNYE
+
+Az alábbi strukturált pontozást kaptuk az első elemzési körben:
+
+\`\`\`json
+${JSON.stringify(scoringJson, null, 2)}
+\`\`\`
+
+FONTOS: NE elemezd újra a logót! Az első kör pontozásából és a logó leírásából (image_description) dolgozz.
+A pontszámokat és indoklásokat fogadd el tényként — a feladatod az összefoglaló elkészítése.
+
+---
+
+${PETI_STYLE_BLOCK}
 
 ## ÖSSZEFOGLALÓ KÉSZÍTÉSE – "Peti mentori értékelés"
 
@@ -415,32 +481,112 @@ function buildSummaryDetailsExtractQuery(): string {
 
 Erősségek és fejlesztendő területek: max 3-3 db, RÖVID 2-5 szavas bullet-ek.
 
-## RÉSZLETES ELEMZÉS
-
-### SZÍNPALETTA
-- Harmónia: A színek hogyan működnek együtt?
-- Pszichológia: Milyen érzéseket közvetítenek?
-- Technikai: RGB/CMYK kompatibilitás
-- Javaslatok: 2 konkrét javaslat
-
-### TIPOGRÁFIA
-- Karakter: A betűtípus személyisége
-- Olvashatóság: Különböző méretekben hogyan működik?
-- Javaslatok: 2 konkrét javaslat
-
-### VIZUÁLIS NYELV
-- Formák: Milyen formavilágot használ?
-- Elemek: Az ikon/szimbólum erőssége
-- Stílusegység: Az elemek összhangja
-- Javaslatok: 2 konkrét javaslat
-
 ---
 
 [Feladat]
-A logó leírása az image_description mezőben található. Készítsd el az összefoglalót (osszegzes, erossegek, fejlesztendo) és a részletes elemzést (szinek, tipografia, vizualisNyelv)!
+A logó leírása az image_description mezőben található, az első kör pontozása fentebb.
+Készítsd el az összefoglalót (osszegzes, erossegek, fejlesztendo)!
 
 FONTOS: Az összefoglaló (osszegzes) legyen Peti mentori stílusú – közvetlen, őszinte, barátságos hangú, mintha személyesen mondaná el a véleményét.`;
 }
+
+function buildDetailsExtractQuery(scoringJson: Record<string, unknown>): string {
+  return `## PONTOZÁS
+
+\`\`\`json
+${JSON.stringify(scoringJson, null, 2)}
+\`\`\`
+
+NE elemezd újra — a logó leírásából (image_description) és a fenti pontszámokból dolgozz.
+
+## RÉSZLETES ELEMZÉS — max 2 mondat mezőnként!
+
+### SZÍNPALETTA
+- harmonia: Színek együttműködése (max 2 mondat)
+- pszichologia: Milyen érzéseket közvetítenek? (max 2 mondat)
+- technikai: RGB/CMYK reprodukálhatóság (max 2 mondat)
+
+### TIPOGRÁFIA
+- karakter: A betűtípus személyisége (max 2 mondat)
+- olvashatosag: Különböző méretekben (max 2 mondat)
+
+### VIZUÁLIS NYELV
+- formak: Formavilág jellemzése (max 2 mondat)
+- elemek: Ikon/szimbólum erőssége (max 2 mondat)
+- stilusEgyseg: Elemek összhangja (max 2 mondat)
+
+[Feladat]
+Készítsd el a fenti 8 mezőt! Javaslatokat NE generálj, azok külön lépésben készülnek. Minden mező max 2 tömör mondat.`;
+}
+
+function buildSuggestionsAExtractQuery(scoringJson: Record<string, unknown>): string {
+  return `## SCORING EREDMÉNY
+
+\`\`\`json
+${JSON.stringify(scoringJson, null, 2)}
+\`\`\`
+
+## FELADAT
+
+A fenti pontozás alapján adj 2-3 konkrét, actionable javaslatot az alábbi 4 szemponthoz:
+- megkulonboztethetoseg (Megkülönböztethetőség)
+- egyszeruseg (Egyszerűség)
+- alkalmazhatosag (Alkalmazhatóság)
+- emlekezetesseg (Emlékezetesség)
+
+Az indoklásokra építs — ne ismételd az indoklást, hanem adj MEGOLDÁST!
+Rövid, tömör javaslatok kellenek (max 1-2 mondat javaslatonként).
+
+FONTOS: CSAK a fenti 4 szemponthoz adj javaslatot!`;
+}
+
+function buildSuggestionsBExtractQuery(scoringJson: Record<string, unknown>): string {
+  return `## SCORING EREDMÉNY
+
+\`\`\`json
+${JSON.stringify(scoringJson, null, 2)}
+\`\`\`
+
+## FELADAT
+
+A fenti pontozás alapján adj 2-3 konkrét, actionable javaslatot az alábbi 3 szemponthoz:
+- idotallosag (Időtállóság)
+- univerzalitas (Univerzalitás)
+- lathatosag (Láthatóság)
+
+Az indoklásokra építs — ne ismételd az indoklást, hanem adj MEGOLDÁST!
+Rövid, tömör javaslatok kellenek (max 1-2 mondat javaslatonként).
+
+FONTOS: CSAK a fenti 3 szemponthoz adj javaslatot!`;
+}
+
+function buildDetailSuggestionsExtractQuery(scoringJson: Record<string, unknown>): string {
+  return `## PONTOZÁS
+
+\`\`\`json
+${JSON.stringify(scoringJson, null, 2)}
+\`\`\`
+
+## FELADAT
+
+A logó leírása (image_description) és a fenti pontszámok alapján adj 2 konkrét, actionable javaslatot az alábbi területekhez:
+
+- szinek: Színpaletta javítási javaslatok (hogyan lehetne jobb a színhasználat?)
+- tipografia: Tipográfiai javaslatok (betűtípus, olvashatóság fejlesztése)
+- vizualisNyelv: Vizuális nyelv javaslatok (formavilág, elemek, stílusegység)
+
+Max 1-2 mondat javaslatonként!`;
+}
+
+const KB_EXTRACT_DETAIL_SUGGESTIONS_SCHEMA = {
+  type: "object",
+  properties: {
+    szinek: { type: "array", items: { type: "string" } },
+    tipografia: { type: "array", items: { type: "string" } },
+    vizualisNyelv: { type: "array", items: { type: "string" } },
+  },
+  required: ["szinek", "tipografia", "vizualisNyelv"],
+};
 
 // ============================================================================
 // UTILS (from prompts-v2.ts and score-summary/route.ts)
@@ -503,7 +649,7 @@ A feltöltő kontextusa: "${brief}"
 // KB-EXTRACT API CALL
 // ============================================================================
 
-async function queryKBExtract<T>(
+async function queryKBExtractOnce<T>(
   query: string,
   imageDescription: string,
   schema: object,
@@ -522,10 +668,6 @@ async function queryKBExtract<T>(
   if (!apiKey) {
     throw new Error("BRANDGUIDE_API_KEY nincs beállítva");
   }
-
-  console.log("[KB-EXTRACT] Query length:", query.length);
-  console.log("[KB-EXTRACT] Image description length:", imageDescription.length);
-  console.log("[KB-EXTRACT] Mode:", mode);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -554,21 +696,43 @@ async function queryKBExtract<T>(
 
     const responseData = await response.json();
 
-    console.log("[KB-EXTRACT] Response status:", response.status);
-
     if (!response.ok) {
+      console.error("[KB-EXTRACT] Full error response:", JSON.stringify(responseData));
+
       const error = responseData.error as {
         code?: string;
         message?: string;
-      };
-      console.error("[KB-EXTRACT] Error:", JSON.stringify(error));
+      } | string | undefined;
 
-      if (error?.code === "QUOTA_EXCEEDED") {
+      let errorCode = '';
+      let errorMessage = '';
+
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorCode = error.code || '';
+        errorMessage = error.message || '';
+      }
+
+      if (!errorMessage && responseData.message) {
+        errorMessage = String(responseData.message);
+      }
+      if (!errorMessage && responseData.detail) {
+        errorMessage = String(responseData.detail);
+      }
+
+      if (errorCode === "QUOTA_EXCEEDED") {
         throw new Error(
           "A havi kvóta elfogyott. Kérjük próbáld újra a következő hónapban."
         );
       }
-      throw new Error(error?.message || "brandguideAI hiba");
+
+      const statusInfo = `HTTP ${response.status}`;
+      const detail = errorMessage || JSON.stringify(responseData).slice(0, 200);
+      const err = new Error(`brandguideAI hiba (${statusInfo}): ${detail}`);
+      // Attach status for retry logic
+      (err as any).httpStatus = response.status;
+      throw err;
     }
 
     console.log("[KB-EXTRACT] Tokens used:", responseData.meta?.tokens_used);
@@ -581,12 +745,65 @@ async function queryKBExtract<T>(
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error(
+      const err = new Error(
         "Az elemzés időtúllépés miatt megszakadt. Kérlek próbáld újra."
       );
+      (err as any).httpStatus = 408;
+      throw err;
     }
     throw error;
   }
+}
+
+/**
+ * KB-Extract hívás retry logikával.
+ * 504 (Gateway Timeout) és 408 (Abort) esetén 1x újrapróbálja.
+ */
+async function queryKBExtract<T>(
+  query: string,
+  imageDescription: string,
+  schema: object,
+  mode: "strict" | "best_effort" = "strict",
+  options?: { max_sources?: number; language?: "hu" | "en" }
+): Promise<{
+  data: T;
+  sources: Array<{ source_id: string; title: string; type: string }>;
+  meta: { tokens_used?: number; validation?: { passed: boolean; errors: string[] } };
+}> {
+  const MAX_RETRIES = 1;
+
+  console.log("[KB-EXTRACT] Query length:", query.length);
+  console.log("[KB-EXTRACT] Image description length:", imageDescription.length);
+  console.log("[KB-EXTRACT] Mode:", mode, "| max_sources:", options?.max_sources ?? 5);
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[KB-EXTRACT] RETRY attempt ${attempt}/${MAX_RETRIES} — waiting 3s...`);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      const result = await queryKBExtractOnce<T>(query, imageDescription, schema, mode, options);
+      console.log(`[KB-EXTRACT] Success on attempt ${attempt + 1}`);
+      return result;
+    } catch (error) {
+      const httpStatus = (error as any).httpStatus;
+      const isRetryable = httpStatus === 504 || httpStatus === 502 || httpStatus === 408 || httpStatus === 503;
+
+      console.error(`[KB-EXTRACT] Attempt ${attempt + 1} failed (status=${httpStatus}): ${(error as Error).message}`);
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        console.log(`[KB-EXTRACT] Retryable error (${httpStatus}), will retry...`);
+        continue;
+      }
+
+      // Non-retryable or last attempt — rethrow
+      throw error;
+    }
+  }
+
+  // Shouldn't reach here, but TypeScript needs it
+  throw new Error("KB-Extract: összes próbálkozás sikertelen");
 }
 
 // ============================================================================
@@ -611,7 +828,7 @@ async function runScoringStep(
     visionDescription,
     KB_EXTRACT_SCORING_SCHEMA,
     "best_effort",
-    { max_sources: 5, language: "hu" }
+    { max_sources: 0, language: "hu" }
   );
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -649,6 +866,7 @@ async function runScoringStep(
     logoTipus: rawScoring.logotipus,
     testLevel: "detailed",
     createdAt: new Date().toISOString(),
+    _timing: { scoring: elapsed },
   };
 
   if (scoringResult.sources && scoringResult.sources.length > 0) {
@@ -691,51 +909,92 @@ async function runScoringStep(
   );
 }
 
-async function runSummaryStep(
-  analysisId: string,
-  visionDescription: string,
-  brief: string | null
-): Promise<Response> {
-  console.log("[SUMMARY] Starting KB-Extract summary+details...");
+/**
+ * Helper: scoring context kinyerése az existing result-ból
+ */
+function extractScoringContext(existingResult: Record<string, unknown>): Record<string, unknown> {
+  const scoringContext: Record<string, unknown> = {
+    osszpontszam: existingResult.osszpontszam,
+    minosites: existingResult.minosites,
+    logoTipus: existingResult.logoTipus,
+    hiresLogo: existingResult.hiresLogo,
+  };
 
-  // Fetch existing scoring result FIRST (while connection is fresh, before long KB-Extract)
+  if (existingResult.szempontok && typeof existingResult.szempontok === "object") {
+    const szempontokForContext: Record<string, unknown> = {};
+    for (const key of SZEMPONT_ORDER) {
+      const item = (existingResult.szempontok as Record<string, SzempontItem>)[key];
+      if (item) {
+        szempontokForContext[key] = {
+          pont: item.pont,
+          maxPont: item.maxPont,
+          indoklas: item.indoklas,
+        };
+      }
+    }
+    scoringContext.szempontok = szempontokForContext;
+  }
+
+  return scoringContext;
+}
+
+/**
+ * Helper: existing result lekérése DB-ből
+ */
+async function fetchExistingResult(analysisId: string, stepName: string): Promise<Record<string, unknown>> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const supabasePre = createClient(supabaseUrl, supabaseServiceKey);
-  const { data: preData, error: preFetchError } = await supabasePre
+  const { data, error } = await supabase
     .from("analyses")
     .select("result")
     .eq("id", analysisId)
     .single();
 
-  if (preFetchError) {
-    console.error("[SUMMARY] Failed to pre-fetch existing result:", preFetchError);
+  if (error) {
+    console.error(`[${stepName}] Failed to fetch existing result:`, error);
     throw new Error("Nem sikerült lekérni az elemzést");
   }
 
-  const existingResult = (preData?.result as Record<string, unknown>) || {};
-  console.log("[SUMMARY] Pre-fetched existing result keys:", Object.keys(existingResult).length);
+  return (data?.result as Record<string, unknown>) || {};
+}
 
-  // Now run KB-Extract (long call, ~48s)
-  const summaryQuery = appendBrief(buildSummaryDetailsExtractQuery(), brief);
+/**
+ * Step 2: Summary — CSAK összefoglaló (osszegzes, erossegek, fejlesztendo)
+ * Könnyű KB-Extract hívás, max_sources=0.
+ * Status marad 'processing' — a details lépés fogja completed-re állítani.
+ */
+async function runSummaryStep(
+  analysisId: string,
+  visionDescription: string,
+  brief: string | null
+): Promise<Response> {
+  console.log("[SUMMARY] Starting KB-Extract summary...");
+
+  const existingResult = await fetchExistingResult(analysisId, "SUMMARY");
+  console.log("[SUMMARY] Existing result keys:", Object.keys(existingResult).length);
+
+  const scoringContext = extractScoringContext(existingResult);
+  console.log("[SUMMARY] Scoring context keys:", Object.keys(scoringContext).length);
+
+  const summaryQuery = appendBrief(buildSummaryExtractQuery(scoringContext), brief);
   const startTime = Date.now();
 
-  const summaryResult = await queryKBExtract<SummaryDetailsDataRaw>(
+  const summaryResult = await queryKBExtract<{ summary: { osszegzes: string; erossegek: string[]; fejlesztendo: string[] } }>(
     summaryQuery,
     visionDescription,
-    KB_EXTRACT_SUMMARY_DETAILS_SCHEMA,
+    KB_EXTRACT_SUMMARY_SCHEMA,
     "best_effort",
-    { max_sources: 5, language: "hu" }
+    { max_sources: 0, language: "hu" }
   );
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[SUMMARY] KB-Extract done in ${elapsed}s`);
 
   const rawSummary = summaryResult.data.summary;
-  const rawDetails = summaryResult.data.details;
 
-  // Merge summary+details into existing scoring result
+  // Merge summary into existing result (status marad processing)
   const mergedResult: Record<string, unknown> = {
     ...existingResult,
     osszegzes: rawSummary?.osszegzes || "",
@@ -745,48 +1004,17 @@ async function runSummaryStep(
     fejlesztendo: Array.isArray(rawSummary?.fejlesztendo)
       ? rawSummary.fejlesztendo.filter(isValidTextItem)
       : [],
-    szinek: {
-      harmonia: rawDetails?.szinek?.harmonia || "",
-      pszichologia: rawDetails?.szinek?.pszichologia || "",
-      technikai: rawDetails?.szinek?.technikai || "",
-      javaslatok: Array.isArray(rawDetails?.szinek?.javaslatok)
-        ? rawDetails.szinek.javaslatok
-        : [],
-    },
-    tipografia: {
-      karakter: rawDetails?.tipografia?.karakter || "",
-      olvashatosag: rawDetails?.tipografia?.olvashatosag || "",
-      javaslatok: Array.isArray(rawDetails?.tipografia?.javaslatok)
-        ? rawDetails.tipografia.javaslatok
-        : [],
-    },
-    vizualisNyelv: {
-      formak: rawDetails?.vizualisNyelv?.formak || "",
-      elemek: rawDetails?.vizualisNyelv?.elemek || "",
-      stilusEgyseg: rawDetails?.vizualisNyelv?.stilusEgyseg || "",
-      javaslatok: Array.isArray(rawDetails?.vizualisNyelv?.javaslatok)
-        ? rawDetails.vizualisNyelv.javaslatok
-        : [],
-    },
   };
 
-  // Add summary sources
-  if (summaryResult.sources && summaryResult.sources.length > 0) {
-    const existingSources = Array.isArray(existingResult.sources)
-      ? existingResult.sources
-      : [];
-    mergedResult.sources = [...existingSources, ...summaryResult.sources];
-  }
+  const existingTiming = (existingResult._timing as Record<string, string>) || {};
+  mergedResult._timing = { ...existingTiming, summary: elapsed };
 
-  // Save final result to DB (fresh client after long KB-Extract)
-  const supabasePost = createClient(supabaseUrl, supabaseServiceKey);
-  const { error: dbError } = await supabasePost
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const { error: dbError } = await supabase
     .from("analyses")
-    .update({
-      result: mergedResult,
-      status: "completed",
-      completed_at: new Date().toISOString(),
-    })
+    .update({ result: mergedResult, status: "processing" })
     .eq("id", analysisId);
 
   if (dbError) {
@@ -794,7 +1022,368 @@ async function runSummaryStep(
     throw new Error("Nem sikerült menteni az elemzést");
   }
 
-  console.log("[SUMMARY] Final result saved");
+  console.log("[SUMMARY] Summary saved (status=processing, details next)");
+
+  return new Response(
+    JSON.stringify({ success: true, step: "summary", elapsed: `${elapsed}s` }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+/**
+ * Step 3: Details — részletes elemzés (szinek, tipografia, vizualisNyelv)
+ * Könnyű KB-Extract hívás, max_sources=0.
+ * Ez állítja completed-re a status-t és küldi az email notificationt.
+ */
+async function runDetailsStep(
+  analysisId: string,
+  visionDescription: string,
+  brief: string | null
+): Promise<Response> {
+  console.log("[DETAILS] Starting KB-Extract details...");
+
+  const existingResult = await fetchExistingResult(analysisId, "DETAILS");
+  console.log("[DETAILS] Existing result keys:", Object.keys(existingResult).length);
+
+  // Karcsúsított scoring context — csak pontszámok, indoklás nélkül
+  const slimScoringContext: Record<string, unknown> = {
+    osszpontszam: existingResult.osszpontszam,
+    minosites: existingResult.minosites,
+    logoTipus: existingResult.logoTipus,
+  };
+
+  if (existingResult.szempontok && typeof existingResult.szempontok === "object") {
+    const slimSzempontok: Record<string, unknown> = {};
+    for (const key of SZEMPONT_ORDER) {
+      const item = (existingResult.szempontok as Record<string, SzempontItem>)[key];
+      if (item) {
+        slimSzempontok[key] = { pont: item.pont, maxPont: item.maxPont };
+      }
+    }
+    slimScoringContext.szempontok = slimSzempontok;
+  }
+
+  const detailsQuery = appendBrief(buildDetailsExtractQuery(slimScoringContext), brief);
+  const startTime = Date.now();
+
+  const detailsResult = await queryKBExtract<{ details: SummaryDetailsDataRaw["details"] }>(
+    detailsQuery,
+    visionDescription,
+    KB_EXTRACT_DETAILS_SCHEMA,
+    "best_effort",
+    { max_sources: 0, language: "hu" }
+  );
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[DETAILS] KB-Extract done in ${elapsed}s`);
+
+  const rawDetails = detailsResult.data.details;
+
+  // Merge details into existing result (javaslatok nélkül — suggestions stepben jönnek)
+  const mergedResult: Record<string, unknown> = {
+    ...existingResult,
+    szinek: {
+      harmonia: rawDetails?.szinek?.harmonia || "",
+      pszichologia: rawDetails?.szinek?.pszichologia || "",
+      technikai: rawDetails?.szinek?.technikai || "",
+      javaslatok: [],
+    },
+    tipografia: {
+      karakter: rawDetails?.tipografia?.karakter || "",
+      olvashatosag: rawDetails?.tipografia?.olvashatosag || "",
+      javaslatok: [],
+    },
+    vizualisNyelv: {
+      formak: rawDetails?.vizualisNyelv?.formak || "",
+      elemek: rawDetails?.vizualisNyelv?.elemek || "",
+      stilusEgyseg: rawDetails?.vizualisNyelv?.stilusEgyseg || "",
+      javaslatok: [],
+    },
+  };
+
+  // Add timing
+  const existingTiming = (existingResult._timing as Record<string, string>) || {};
+  mergedResult._timing = { ...existingTiming, details: elapsed };
+
+  // Add sources
+  if (detailsResult.sources && detailsResult.sources.length > 0) {
+    const existingSources = Array.isArray(existingResult.sources)
+      ? existingResult.sources
+      : [];
+    mergedResult.sources = [...existingSources, ...detailsResult.sources];
+  }
+
+  // Save — status marad processing, completed csak az utolsó step (detail-suggestions) után
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const { error: dbError } = await supabase
+    .from("analyses")
+    .update({
+      result: mergedResult,
+      status: "processing",
+    })
+    .eq("id", analysisId);
+
+  if (dbError) {
+    console.error("[DETAILS] DB error:", JSON.stringify(dbError));
+    throw new Error("Nem sikerült menteni az elemzést");
+  }
+
+  console.log("[DETAILS] Result saved (processing, suggestions next)");
+
+  return new Response(
+    JSON.stringify({ success: true, step: "details", elapsed: `${elapsed}s` }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+/**
+ * Step 5a: Suggestions-A — javaslatok az első 4 szemponthoz (generate-only, NINCS DB write).
+ * Párhuzamosan fut suggestions-b és detail-suggestions-szel.
+ */
+async function runSuggestionsAStep(
+  analysisId: string,
+  visionDescription: string
+): Promise<Response> {
+  console.log("[SUGGESTIONS-A] Starting KB-Extract suggestions-a (4 szempont)...");
+
+  const existingResult = await fetchExistingResult(analysisId, "SUGGESTIONS-A");
+
+  // Build scoring context
+  const scoringContext: Record<string, unknown> = {
+    osszpontszam: existingResult.osszpontszam,
+    minosites: existingResult.minosites,
+  };
+
+  if (existingResult.szempontok && typeof existingResult.szempontok === "object") {
+    const szempontokForContext: Record<string, unknown> = {};
+    for (const key of SZEMPONT_ORDER) {
+      const item = (existingResult.szempontok as Record<string, SzempontItem>)[key];
+      if (item) {
+        szempontokForContext[key] = {
+          pont: item.pont,
+          maxPont: item.maxPont,
+          indoklas: item.indoklas,
+        };
+      }
+    }
+    scoringContext.szempontok = szempontokForContext;
+  }
+
+  const query = buildSuggestionsAExtractQuery(scoringContext);
+  const startTime = Date.now();
+
+  const result = await queryKBExtract<{ javaslatok: Record<string, string[]> }>(
+    query,
+    visionDescription,
+    KB_EXTRACT_SUGGESTIONS_A_SCHEMA,
+    "best_effort",
+    { max_sources: 0, language: "hu" }
+  );
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[SUGGESTIONS-A] KB-Extract done in ${elapsed}s`);
+
+  // Generate-only: visszaadjuk az adatot, NEM írunk DB-be
+  return new Response(
+    JSON.stringify({
+      success: true,
+      step: "suggestions-a",
+      data: { javaslatok: result.data.javaslatok },
+      elapsed: `${elapsed}s`,
+    }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+}
+
+/**
+ * Step 5b: Suggestions-B — javaslatok az utolsó 3 szemponthoz (generate-only, NINCS DB write).
+ * Párhuzamosan fut suggestions-a és detail-suggestions-szel.
+ */
+async function runSuggestionsBStep(
+  analysisId: string,
+  visionDescription: string
+): Promise<Response> {
+  console.log("[SUGGESTIONS-B] Starting KB-Extract suggestions-b (3 szempont)...");
+
+  const existingResult = await fetchExistingResult(analysisId, "SUGGESTIONS-B");
+
+  // Build scoring context
+  const scoringContext: Record<string, unknown> = {
+    osszpontszam: existingResult.osszpontszam,
+    minosites: existingResult.minosites,
+  };
+
+  if (existingResult.szempontok && typeof existingResult.szempontok === "object") {
+    const szempontokForContext: Record<string, unknown> = {};
+    for (const key of SZEMPONT_ORDER) {
+      const item = (existingResult.szempontok as Record<string, SzempontItem>)[key];
+      if (item) {
+        szempontokForContext[key] = {
+          pont: item.pont,
+          maxPont: item.maxPont,
+          indoklas: item.indoklas,
+        };
+      }
+    }
+    scoringContext.szempontok = szempontokForContext;
+  }
+
+  const query = buildSuggestionsBExtractQuery(scoringContext);
+  const startTime = Date.now();
+
+  const result = await queryKBExtract<{ javaslatok: Record<string, string[]> }>(
+    query,
+    visionDescription,
+    KB_EXTRACT_SUGGESTIONS_B_SCHEMA,
+    "best_effort",
+    { max_sources: 0, language: "hu" }
+  );
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[SUGGESTIONS-B] KB-Extract done in ${elapsed}s`);
+
+  // Generate-only: visszaadjuk az adatot, NEM írunk DB-be
+  return new Response(
+    JSON.stringify({
+      success: true,
+      step: "suggestions-b",
+      data: { javaslatok: result.data.javaslatok },
+      elapsed: `${elapsed}s`,
+    }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+}
+
+/**
+ * Step 5c: Detail-suggestions — részletes javaslatok (szinek, tipografia, vizualisNyelv).
+ * Generate-only: NINCS DB write, NINCS email. A finalize step menti el.
+ * Párhuzamosan fut suggestions-a és suggestions-b-vel.
+ */
+async function runDetailSuggestionsStep(
+  analysisId: string,
+  visionDescription: string
+): Promise<Response> {
+  console.log("[DETAIL-SUGGESTIONS] Starting KB-Extract detail-suggestions...");
+
+  const existingResult = await fetchExistingResult(analysisId, "DETAIL-SUGGESTIONS");
+
+  // Slim scoring context
+  const slimContext: Record<string, unknown> = {
+    osszpontszam: existingResult.osszpontszam,
+    minosites: existingResult.minosites,
+    logoTipus: existingResult.logoTipus,
+  };
+
+  const query = buildDetailSuggestionsExtractQuery(slimContext);
+  const startTime = Date.now();
+
+  const result = await queryKBExtract<{
+    szinek: string[];
+    tipografia: string[];
+    vizualisNyelv: string[];
+  }>(
+    query,
+    visionDescription,
+    KB_EXTRACT_DETAIL_SUGGESTIONS_SCHEMA,
+    "best_effort",
+    { max_sources: 0, language: "hu" }
+  );
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[DETAIL-SUGGESTIONS] KB-Extract done in ${elapsed}s`);
+
+  // Generate-only: visszaadjuk az adatot, NEM írunk DB-be
+  return new Response(
+    JSON.stringify({
+      success: true,
+      step: "detail-suggestions",
+      data: {
+        szinek: result.data.szinek,
+        tipografia: result.data.tipografia,
+        vizualisNyelv: result.data.vizualisNyelv,
+      },
+      elapsed: `${elapsed}s`,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+/**
+ * Step 6: Finalize — merge all suggestions + DB write + completed + email.
+ * A kliens küldi be az összegyűjtött javaslat-adatokat.
+ * Egyetlen DB write, nincs race condition.
+ */
+async function runFinalizeStep(
+  analysisId: string,
+  suggestionsAData: Record<string, string[]> | null,
+  suggestionsBData: Record<string, string[]> | null,
+  detailSuggestionsData: { szinek?: string[]; tipografia?: string[]; vizualisNyelv?: string[] } | null
+): Promise<Response> {
+  console.log("[FINALIZE] Starting finalize — merging all suggestions...");
+
+  const existingResult = await fetchExistingResult(analysisId, "FINALIZE");
+
+  // Merge szempontonkénti javaslatok (A: 4 szempont + B: 3 szempont)
+  if (existingResult.szempontok && typeof existingResult.szempontok === "object") {
+    const szempontok = existingResult.szempontok as Record<string, SzempontItem>;
+    const allSuggestions = { ...suggestionsAData, ...suggestionsBData };
+
+    for (const key of SZEMPONT_ORDER) {
+      if (szempontok[key] && Array.isArray(allSuggestions?.[key])) {
+        szempontok[key].javaslatok = allSuggestions[key];
+      }
+    }
+    existingResult.szempontok = szempontok;
+    console.log("[FINALIZE] Merged szempontonkénti javaslatok (A+B)");
+  }
+
+  // Merge detail javaslatok (szinek/tipografia/vizualisNyelv)
+  if (detailSuggestionsData) {
+    const mergeInto = (sectionKey: string, javaslatok: string[] | undefined) => {
+      if (Array.isArray(javaslatok) && javaslatok.length > 0) {
+        const section = existingResult[sectionKey] as Record<string, unknown> | undefined;
+        if (section && typeof section === "object") {
+          section.javaslatok = javaslatok;
+          existingResult[sectionKey] = section;
+        }
+      }
+    };
+
+    mergeInto("szinek", detailSuggestionsData.szinek);
+    mergeInto("tipografia", detailSuggestionsData.tipografia);
+    mergeInto("vizualisNyelv", detailSuggestionsData.vizualisNyelv);
+    console.log("[FINALIZE] Merged detail javaslatok");
+  }
+
+  // Add timing
+  const existingTiming = (existingResult._timing as Record<string, string>) || {};
+  existingResult._timing = { ...existingTiming, finalize: new Date().toISOString() };
+
+  // Single DB update: result + status='completed' + completed_at
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const { error: dbError } = await supabase
+    .from("analyses")
+    .update({
+      result: existingResult,
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", analysisId);
+
+  if (dbError) {
+    console.error("[FINALIZE] DB error:", JSON.stringify(dbError));
+    throw new Error("Nem sikerült menteni a végleges eredményt");
+  }
+
+  console.log("[FINALIZE] Result saved (completed!)");
 
   // Email notification callback (non-blocking)
   try {
@@ -813,18 +1402,11 @@ async function runSummaryStep(
     }
   } catch (notifyError) {
     console.error("[NOTIFY] Email callback failed:", notifyError);
-    // Non-critical — don't fail the analysis because of email
   }
 
   return new Response(
-    JSON.stringify({
-      success: true,
-      step: "summary",
-      elapsed: `${elapsed}s`,
-    }),
-    {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
+    JSON.stringify({ success: true, step: "finalize" }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
 
@@ -839,22 +1421,27 @@ Deno.serve(async (req: Request) => {
   }
 
   let parsedAnalysisId: string | undefined;
+  let parsedStep: string | undefined;
 
   try {
     const body = await req.json();
-    const { analysisId, visionDescription, step, brief } = body as {
+    const { analysisId, visionDescription, step, brief, suggestionsAData, suggestionsBData, detailSuggestionsData } = body as {
       analysisId?: string;
       visionDescription?: string;
-      step?: "scoring" | "summary";
+      step?: "scoring" | "summary" | "details" | "suggestions-a" | "suggestions-b" | "detail-suggestions" | "finalize";
       brief?: string;
+      suggestionsAData?: Record<string, string[]>;
+      suggestionsBData?: Record<string, string[]>;
+      detailSuggestionsData?: { szinek?: string[]; tipografia?: string[]; vizualisNyelv?: string[] };
     };
     parsedAnalysisId = analysisId;
+    parsedStep = step;
 
     // Validate input
-    if (!analysisId || !visionDescription || !step) {
+    if (!analysisId || !step) {
       return new Response(
         JSON.stringify({
-          error: "analysisId, visionDescription és step kötelező",
+          error: "analysisId és step kötelező",
         }),
         {
           status: 400,
@@ -863,10 +1450,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (step !== "scoring" && step !== "summary") {
+    if (step === "scoring" && !visionDescription) {
       return new Response(
         JSON.stringify({
-          error: 'step értéke "scoring" vagy "summary" lehet',
+          error: "visionDescription kötelező a scoring lépéshez",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const validSteps = ["scoring", "summary", "details", "suggestions-a", "suggestions-b", "detail-suggestions", "finalize"];
+    if (!validSteps.includes(step)) {
+      return new Response(
+        JSON.stringify({
+          error: `step értéke: ${validSteps.join(", ")}`,
         }),
         {
           status: 400,
@@ -900,27 +1500,71 @@ Deno.serve(async (req: Request) => {
 
     const effectiveBrief = brief || analysisData.brief || null;
 
-    console.log(`[PIPELINE] Step: ${step}, analysisId: ${analysisId}`);
+    // visionDescription: paraméterből VAGY DB-ből (summary/suggestions resume esetén)
+    const effectiveVisionDescription = visionDescription || analysisData.vision_description;
+
+    if (!effectiveVisionDescription) {
+      return new Response(
+        JSON.stringify({
+          error: "visionDescription nem található (sem paraméterben, sem DB-ben)",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log(`[PIPELINE] Step: ${step}, analysisId: ${analysisId}, visionDesc source: ${visionDescription ? 'param' : 'DB'}`);
 
     if (step === "scoring") {
       return await runScoringStep(
         supabase,
         analysisId,
-        visionDescription,
+        effectiveVisionDescription,
         effectiveBrief,
         analysisData.vision_description
       );
-    } else {
+    } else if (step === "summary") {
       return await runSummaryStep(
         analysisId,
-        visionDescription,
+        effectiveVisionDescription,
         effectiveBrief
+      );
+    } else if (step === "details") {
+      return await runDetailsStep(
+        analysisId,
+        effectiveVisionDescription,
+        effectiveBrief
+      );
+    } else if (step === "suggestions-a") {
+      return await runSuggestionsAStep(
+        analysisId,
+        effectiveVisionDescription
+      );
+    } else if (step === "suggestions-b") {
+      return await runSuggestionsBStep(
+        analysisId,
+        effectiveVisionDescription
+      );
+    } else if (step === "detail-suggestions") {
+      return await runDetailSuggestionsStep(
+        analysisId,
+        effectiveVisionDescription
+      );
+    } else {
+      // finalize
+      return await runFinalizeStep(
+        analysisId,
+        suggestionsAData || null,
+        suggestionsBData || null,
+        detailSuggestionsData || null
       );
     }
   } catch (error) {
     console.error("[PIPELINE] Error:", error);
 
-    // Send failure notification (non-blocking)
+    // Send failure notification — minden step critical
     if (parsedAnalysisId) {
       try {
         const appUrl = Deno.env.get("APP_URL") || "https://logolab.hu";
@@ -935,10 +1579,10 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               analysisId: parsedAnalysisId,
               status: "failed",
-              errorMessage: error instanceof Error ? error.message : "Ismeretlen hiba",
+              errorMessage: `[${parsedStep || 'unknown'}] ${error instanceof Error ? error.message : "Ismeretlen hiba"}`,
             }),
           });
-          console.log("[NOTIFY] Email callback sent (failed)");
+          console.log(`[NOTIFY] Email callback sent (failed, step=${parsedStep})`);
         }
       } catch (notifyError) {
         console.error("[NOTIFY] Failure callback error:", notifyError);
